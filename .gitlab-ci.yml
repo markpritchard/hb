@@ -1,0 +1,14 @@
+image: rustdocker/rust:stable
+
+variables:
+  GIT_SSL_NO_VERIFY: "true"
+  CARGO_HOME: $CI_PROJECT_DIR/cargo
+
+test:cargo:
+  script:
+  - rustc --version && cargo --version
+  - cargo test --verbose --jobs 1
+  cache:
+    paths:
+      - target/
+      - cargo/
