@@ -2,13 +2,22 @@ image: rustdocker/rust:stable
 
 variables:
   GIT_SSL_NO_VERIFY: "true"
-  CARGO_HOME: $CI_PROJECT_DIR/cargo
+  CARGO_HOME: /root/.cargo
 
 test:cargo:
   script:
-  - rustc --version && cargo --version
-  - cargo test --verbose --jobs 1
+    - rustc --version && cargo --version
+    - cargo test --verbose --jobs 1
   cache:
     paths:
-      - target/
-      - cargo/
+      - $CARGO_HOME
+      - $CI_PROJECT_DIR/target/
+
+lint:clippy:
+  allow_failure: false
+  script:
+    - cargo clippy -- -D warnings # Turn all warnings into errors
+  cache:
+    paths:
+      - $CARGO_HOME
+      - $CI_PROJECT_DIR/target/

@@ -5,3 +5,9 @@ authors = ["Mark Pritchard <mpritcha@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+clap = "2.33"
+env_logger = "0.7"
+hdrhistogram = "7.1"
+log = "0.4"
+rand = "0.7"
+reqwest = "0.10"
