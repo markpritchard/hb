@@ -9,10 +9,9 @@ pub(crate) fn url_source(config: &config::Config) -> impl Iterator<Item = &str> 
     // Create the requested order generator
     let limit = config.urls.len();
     let requests = config.requests;
-    let index_iter: Box<dyn Iterator<Item=usize>> = if let RequestOrder::SEQUENTIAL = config.order {
-        Box::new(SequentialIter::new(limit, requests))
-    } else {
-        Box::new(RandomIter::new(limit, requests))
+    let index_iter: Box<dyn Iterator<Item=usize>> = match config.order {
+        RequestOrder::Sequential => Box::new(SequentialIter::new(limit, requests)),
+        RequestOrder::Random => Box::new(RandomIter::new(limit, requests)),
     };
 
     UrlSource { urls: &config.urls, index_iter: Box::new(index_iter) }

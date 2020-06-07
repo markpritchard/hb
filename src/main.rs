@@ -3,6 +3,7 @@ extern crate log;
 
 mod app;
 mod config;
+mod timedelay;
 mod urlsource;
 
 fn main() {

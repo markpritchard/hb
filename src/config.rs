@@ -7,11 +7,19 @@ pub(crate) struct Config {
     pub concurrency: usize,
     pub requests: usize,
     pub order: RequestOrder,
+    pub delay_ms: u32,
+    pub delay_distrib: DelayDistribution,
 }
 
 pub(crate) enum RequestOrder {
-    SEQUENTIAL,
-    RANDOM,
+    Sequential,
+    Random,
+}
+
+pub(crate) enum DelayDistribution {
+    Constant,
+    Uniform,
+    NegativeExponential,
 }
 
 impl Config {
@@ -55,9 +63,25 @@ impl Config {
                 .min_values(0)
                 .value_name("URL"))
 
+            // Time delay between request *dispatch*
+            .arg(clap::Arg::with_name("delay")
+                .short("d")
+                .long("delay")
+                .value_name("ms")
+                .default_value("0")
+                .help("time between requests (NB: includes response time)"))
+            .arg(clap::Arg::with_name("delaydistrib")
+                .short("D")
+                .long("delay-dist")
+                .value_name("distribution")
+                .possible_values(&["c", "u", "ne"])
+                .default_value("c")
+                .requires("d")
+                .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
+
             .get_matches();
 
-        // Extract the URls
+        // Extract the URLs
         let urls = load_urls(matches.value_of("urlfile"), matches.values_of("urls"));
 
         // Grab basic params
@@ -65,11 +89,17 @@ impl Config {
         let concurrency: usize = matches.value_of("concurrency").unwrap().parse::<>().unwrap();
         let requests: usize = matches.value_of("requests").unwrap().parse::<>().unwrap();
         let order = match matches.value_of("order").unwrap() {
-            "s" => RequestOrder::SEQUENTIAL,
-            _ => RequestOrder::RANDOM
+            "s" => RequestOrder::Sequential,
+            _ => RequestOrder::Random
+        };
+        let delay_ms : u32 = matches.value_of("delay").unwrap().parse::<>().unwrap();
+        let delay_distrib = match matches.value_of("delaydistrib").unwrap() {
+            "u" => DelayDistribution::Uniform,
+            "ne" => DelayDistribution::NegativeExponential,
+            _ => DelayDistribution::Constant
         };
 
-        Config { urls, concurrency, requests, order }
+        Config { urls, concurrency, requests, order, delay_ms, delay_distrib }
     }
 }
 
