@@ -1,9 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rand::prelude::ThreadRng;
-use rand::Rng;
-
 use crate::config::{self, RequestOrder};
+use rand::{thread_rng, Rng};
 
 pub(crate) fn url_source(config: &config::Config) -> impl Iterator<Item = &str> {
     // Create the requested order generator
@@ -35,12 +33,11 @@ struct RandomIter {
     count: AtomicUsize,
     limit: usize,
     requests: usize,
-    rng: ThreadRng,
 }
 
 impl RandomIter {
     pub fn new(limit: usize, requests: usize) -> RandomIter {
-        RandomIter { count: AtomicUsize::new(0), limit, requests, rng: rand::thread_rng() }
+        RandomIter { count: AtomicUsize::new(0), limit, requests }
     }
 }
 
@@ -53,7 +50,7 @@ impl Iterator for RandomIter {
 
         // Extract the next URL if we haven't generated sufficient URLs
         if index < self.requests {
-            Some(self.rng.gen_range(0, self.limit))
+            Some(thread_rng().gen_range(0, self.limit))
         } else {
             None
         }

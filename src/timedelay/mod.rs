@@ -1,7 +1,8 @@
-use crate::config::{self, DelayDistribution};
 use std::time::Duration;
-use rand::prelude::ThreadRng;
-use rand::Rng;
+
+use rand::{thread_rng, Rng};
+
+use crate::config::{self, DelayDistribution};
 
 pub(crate) fn time_delay(config: &config::Config) -> Box<dyn Iterator<Item=Duration>> {
     // Create the requested time delay generator
@@ -35,14 +36,12 @@ impl Iterator for ConstantDelay {
 // http://perfdynamics.blogspot.com/2012/05/load-testing-with-uniform-vs.html
 struct NegativeExponentialDelay {
     z_neg: f32,
-    rng: ThreadRng,
 }
 
 impl NegativeExponentialDelay {
     fn new(delay_ms: u32) -> NegativeExponentialDelay {
         let z_neg = -1f32 * delay_ms as f32;
-        let rng = rand::thread_rng();
-        NegativeExponentialDelay { z_neg, rng }
+        NegativeExponentialDelay { z_neg }
     }
 }
 
@@ -52,7 +51,7 @@ impl Iterator for NegativeExponentialDelay {
     // http://perfdynamics.blogspot.com/2012/03/how-to-generate-exponential-delays.html
     fn next(&mut self) -> Option<Self::Item> {
         // Generate next delay time
-        let u = self.rng.gen_range(0f32, 1f32);
+        let u = thread_rng().gen_range(0f32, 1f32);
         let t = (self.z_neg * u.ln()) as u64;
         Some(Duration::from_millis(t))
     }
@@ -60,12 +59,11 @@ impl Iterator for NegativeExponentialDelay {
 
 struct UniformDelay {
     bound_ms: u32,
-    rng: ThreadRng,
 }
 
 impl UniformDelay {
     fn new(delay_ms: u32) -> UniformDelay {
-        UniformDelay { bound_ms: delay_ms, rng: rand::thread_rng() }
+        UniformDelay { bound_ms: delay_ms }
     }
 }
 
@@ -73,15 +71,16 @@ impl Iterator for UniformDelay {
     type Item = Duration;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let delay_ms = self.rng.gen_range(0, self.bound_ms);
+        let delay_ms = thread_rng().gen_range(0, self.bound_ms);
         Some(Duration::from_millis(delay_ms as u64))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use assert_approx_eq::assert_approx_eq;
+
+    use super::*;
 
     #[test]
     fn test_constant() {
