@@ -1,15 +1,107 @@
 #[macro_use]
 extern crate log;
 
-mod app;
+use std::sync;
+
+use std::collections::HashMap;
+use hdrhistogram::Histogram;
+use std::sync::{Mutex, Arc};
+use std::error::Error;
+
 mod config;
 mod timedelay;
-mod urlsource;
+mod requestgen;
+mod worker;
 
-fn main() {
-    env_logger::init();
+/// Parses command line arguments, launches the workers, consolidates results
+fn main() -> Result<(), Box<dyn Error>> {
+    // Initialise logging
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .init();
 
-    // Parse the command line and run the app
-    let config = config::Config::from_cmdline();
-    app::run(&config);
+    // Parse the command line and read in the set of URLs we use to test
+    let mut config = config::Config::from_cmdline();
+
+    // Initialise the request generator from the config
+    // Note that it consumes the URLs from config (hence the mutable ref)
+    let request_generator = sync::Arc::new(requestgen::RequestGenerator::new(&mut config));
+
+    // Initialise the summary bench result each worker will accumulate into
+    let result_summary = Arc::new(Mutex::new(BenchResult::new()));
+
+    // Launch the workers
+    info!("Starting {} workers", config.concurrency);
+    let mut workers = Vec::new();
+    for id in 0..config.concurrency {
+        workers.push(worker::start(id, &request_generator, &result_summary));
+    }
+
+    // Wait for them to complete
+    info!("Waiting for test to complete");
+    for worker in workers {
+        worker.join().unwrap()
+    }
+
+    // Print the results of the benchmark
+    print_results(result_summary.clone());
+
+    Ok(())
+}
+
+/// Statistics we generate during the benchmark process
+pub(crate) struct BenchResult {
+    status: HashMap<u16, u32>,
+    errors: u32,
+    latency: Histogram<u64>,
+}
+
+impl BenchResult {
+    /// Initialise a new benchmark result
+    pub fn new() -> BenchResult {
+        BenchResult {
+            status: HashMap::new(),
+            errors: 0,
+            // We measure latency in microseconds, so configure the histogram to track 1 microsecond to 10 seconds
+            latency: Histogram::<u64>::new_with_bounds(1, 1000 * 1000 * 10, 2).unwrap(),
+        }
+    }
+
+    /// Accumulate another benchmark result into this one (i.e. from a worker thread into the summary).
+    pub fn accumulate(&mut self, other: BenchResult) {
+        for (code, count) in other.status {
+            let total = self.status.entry(code).or_insert(0);
+            *total += count;
+        }
+
+        self.errors += other.errors;
+
+        self.latency.add(other.latency).unwrap();
+    }
+}
+
+// Output the benchmark results
+fn print_results(summary: Arc<Mutex<BenchResult>>) {
+    let summary = summary.lock().unwrap();
+
+    // Note errors if they occurred
+    if summary.errors > 0 {
+        warn!("*** {} errors", summary.errors);
+    }
+
+    // Dump the status codes
+    let mut codes = summary.status.keys().map(|c| *c).collect::<Vec<u16>>();
+    codes.sort();
+    println!("\nHTTP responses:");
+    for code in codes {
+        println!("{}\t{}", code, summary.status.get(&code).unwrap());
+    }
+
+    // Dump the latency
+    println!("\nLatency:");
+    for p in &[50f64, 75f64, 95f64, 99f64, 99.9f64, 99.99f64, 99.999f64, 100f64] {
+        let micros = &summary.latency.value_at_percentile(*p);
+        let millis = *micros as f64 / 1000f64;
+        println!("{}%\t{}ms", p, millis);
+    }
 }

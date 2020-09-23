@@ -4,7 +4,7 @@ use std::io::BufRead;
 
 pub(crate) struct Config {
     pub urls: Vec<String>,
-    pub concurrency: usize,
+    pub concurrency: u16,
     pub requests: usize,
     pub order: RequestOrder,
     pub delay_ms: u32,
@@ -27,7 +27,6 @@ impl Config {
         let matches = clap::App::new("httpbench")
             .version("0.1.0")
             .about("HTTP/S load testing tool")
-
             // Number of concurrent requests / workers
             .arg(clap::Arg::with_name("concurrency")
                 .short("c")
@@ -50,6 +49,23 @@ impl Config {
                 .default_value("r")
                 .help("order in which to request URLs: r=random, s=sequential"))
 
+            // Time delay between request *dispatch*
+            .arg(clap::Arg::with_name("delay")
+                .short("t")
+                .long("delay-time")
+                .value_name("ms")
+                .default_value("0")
+                .help("time between requests (NB: includes response time)"))
+
+            .arg(clap::Arg::with_name("delaydist")
+                .short("d")
+                .long("delay-dist")
+                .value_name("distribution")
+                .possible_values(&["c", "u", "ne"])
+                .default_value("c")
+                .requires("delay")
+                .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
+
             // URLs we test with - in a file, or passed as command-line args
             .arg(clap::Arg::with_name("urlfile")
                 .short("f")
@@ -63,22 +79,6 @@ impl Config {
                 .min_values(0)
                 .value_name("URL"))
 
-            // Time delay between request *dispatch*
-            .arg(clap::Arg::with_name("delay")
-                .short("d")
-                .long("delay")
-                .value_name("ms")
-                .default_value("0")
-                .help("time between requests (NB: includes response time)"))
-            .arg(clap::Arg::with_name("delaydistrib")
-                .short("D")
-                .long("delay-dist")
-                .value_name("distribution")
-                .possible_values(&["c", "u", "ne"])
-                .default_value("c")
-                .requires("d")
-                .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
-
             .get_matches();
 
         // Extract the URLs
@@ -86,14 +86,14 @@ impl Config {
 
         // Grab basic params
         // TODO cleanup parsing of these arguments
-        let concurrency: usize = matches.value_of("concurrency").unwrap().parse::<>().unwrap();
+        let concurrency: u16 = matches.value_of("concurrency").unwrap().parse::<>().unwrap();
         let requests: usize = matches.value_of("requests").unwrap().parse::<>().unwrap();
         let order = match matches.value_of("order").unwrap() {
             "s" => RequestOrder::Sequential,
             _ => RequestOrder::Random
         };
-        let delay_ms : u32 = matches.value_of("delay").unwrap().parse::<>().unwrap();
-        let delay_distrib = match matches.value_of("delaydistrib").unwrap() {
+        let delay_ms: u32 = matches.value_of("delay").unwrap().parse::<>().unwrap();
+        let delay_distrib = match matches.value_of("delaydist").unwrap() {
             "u" => DelayDistribution::Uniform,
             "ne" => DelayDistribution::NegativeExponential,
             _ => DelayDistribution::Constant
