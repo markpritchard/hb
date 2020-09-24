@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use hdrhistogram::Histogram;
 use std::sync::{Mutex, Arc};
 use std::error::Error;
+use std::time::{Instant, Duration};
 
 mod config;
-mod timedelay;
 mod requestgen;
 mod worker;
 
@@ -31,6 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let result_summary = Arc::new(Mutex::new(BenchResult::new()));
 
     // Launch the workers
+    let bench_start = Instant::now();
     info!("Starting {} workers", config.concurrency);
     let mut workers = Vec::new();
     for id in 0..config.concurrency {
@@ -42,9 +43,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     for worker in workers {
         worker.join().unwrap()
     }
+    let bench_end = Instant::now();
 
     // Print the results of the benchmark
-    print_results(result_summary.clone());
+    let bench_duration = bench_end.duration_since(bench_start);
+    print_results(bench_duration, result_summary);
 
     Ok(())
 }
@@ -81,7 +84,7 @@ impl BenchResult {
 }
 
 // Output the benchmark results
-fn print_results(summary: Arc<Mutex<BenchResult>>) {
+fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
     let summary = summary.lock().unwrap();
 
     // Note errors if they occurred
@@ -90,7 +93,9 @@ fn print_results(summary: Arc<Mutex<BenchResult>>) {
     }
 
     // Dump the status codes
-    let mut codes = summary.status.keys().map(|c| *c).collect::<Vec<u16>>();
+    let mut codes = summary.status.keys()
+        .copied()
+        .collect::<Vec<u16>>();
     codes.sort();
     println!("\nHTTP responses:");
     for code in codes {
@@ -98,7 +103,7 @@ fn print_results(summary: Arc<Mutex<BenchResult>>) {
     }
 
     // Dump the latency
-    println!("\nLatency:");
+    println!("\nBenchmark run time {}s.\nLatency:", bench_duration.as_secs_f32());
     for p in &[50f64, 75f64, 95f64, 99f64, 99.9f64, 99.99f64, 99.999f64, 100f64] {
         let micros = &summary.latency.value_at_percentile(*p);
         let millis = *micros as f64 / 1000f64;

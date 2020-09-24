@@ -1,11 +1,14 @@
 use crate::config;
+use std::time::Duration;
 
 mod indexseq;
+mod timedelay;
 
 /// Generates requests from the source URLs according to the configured order, time delay etc
 pub(crate) struct RequestGenerator {
     urls: Vec<String>,
     url_index_supplier: Box<dyn indexseq::IndexSupplier>,
+    time_delay_supplier: Box<dyn timedelay::TimeDelaySupplier>,
 }
 
 impl RequestGenerator {
@@ -15,18 +18,30 @@ impl RequestGenerator {
         // Grab the URLs read from the input file etc
         let urls = std::mem::replace(&mut config.urls, Vec::<String>::new());
 
-        // Create the requested URL index generator
+        // Create the index supplier (used to select the next URL from the test set)
         let index_limit = urls.len();
         let num_requests = config.requests;
         let url_index_supplier = indexseq::create_supplier(&config.order, index_limit, num_requests);
 
-        RequestGenerator { urls, url_index_supplier }
+        // Create the time delay supplier used to schedule the next request
+        let time_delay_supplier = timedelay::create_supplier(&config.delay_ms, &config.delay_distrib);
+
+        RequestGenerator { urls, url_index_supplier, time_delay_supplier }
     }
 
     /// Return the next request to execute or None if no more requests need to be executed
     pub(crate) fn next(&self) -> Option<Request> {
+        // Fetch the next URL
         self.url_index_supplier.next_index()
-            .map(move |i| Request { url: self.urls[i].as_str() })
+            .map(move |i| {
+                // Extract the URL corresponding to the selected index
+                let url = self.urls[i].as_str();
+
+                // Determine the time delay for this request
+                let sleep = self.time_delay_supplier.next_delay();
+
+                Request { url, sleep }
+            })
     }
 }
 
@@ -34,6 +49,7 @@ impl RequestGenerator {
 #[derive(Debug, PartialEq)]
 pub(crate) struct Request<'a> {
     pub url: &'a str,
+    pub sleep: Duration,
 }
 
 // Need to share the generator across threads

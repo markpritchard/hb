@@ -25,6 +25,11 @@ fn run(worker_id: u16, request_generator: Arc<RequestGenerator>, summary: Arc<Mu
     while let Some(request) = request_generator.next() {
         debug!("{} -> {:?}", worker_id, request);
 
+        // If we have a delay between requests, then sleep
+        if request.sleep.as_nanos() > 0 {
+            thread::sleep(request.sleep);
+        }
+
         // Execute the request note the request latency
         let start = Instant::now();
         let response = client.get(request.url).send();
