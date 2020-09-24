@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Parse the command line and read in the set of URLs we use to test
-    let mut config = config::Config::from_cmdline();
+    let mut config = config::Config::from_cmdline()?;
 
     // Initialise the request generator from the config
     // Note that it consumes the URLs from config (hence the mutable ref)

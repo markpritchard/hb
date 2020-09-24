@@ -331,6 +331,7 @@ dependencies = [
  "log",
  "rand",
  "reqwest",
+ "url",
 ]
 
 [[package]]

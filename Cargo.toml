@@ -12,6 +12,7 @@ hdrhistogram = "7.1"
 log = "0.4"
 rand = "0.7"
 reqwest = { version = "0.10", features = ["blocking"] }
+url = "2.1"
 
 [profile.release]
 lto = "fat"

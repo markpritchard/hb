@@ -108,7 +108,7 @@ mod tests {
         }
         let avg = sum_us as f64 / TEST_ITERS as f64;
 
-        assert_approx_eq!(DELAY_US as f64, avg, 300f64);
+        assert_approx_eq!(DELAY_US as f64, avg, 2000f64);
     }
 
     // Verifies that the uniform supplier generates the correct distribution
