@@ -1,5 +1,7 @@
 use crate::config;
 use std::time::Duration;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::sync::Mutex;
 
 mod indexseq;
 mod timedelay;
@@ -9,6 +11,7 @@ pub(crate) struct RequestGenerator {
     urls: Vec<String>,
     url_index_supplier: Box<dyn indexseq::IndexSupplier>,
     time_delay_supplier: Box<dyn timedelay::TimeDelaySupplier>,
+    pub(crate) progress: Mutex<ProgressBar>,
 }
 
 impl RequestGenerator {
@@ -26,12 +29,17 @@ impl RequestGenerator {
         // Create the time delay supplier used to schedule the next request
         let time_delay_supplier = timedelay::create_supplier(&config.delay_ms, &config.delay_distrib);
 
-        RequestGenerator { urls, url_index_supplier, time_delay_supplier }
+        // Initialise the request generator
+        let progress = ProgressBar::new(num_requests as u64);
+        progress.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+            .progress_chars("#>-"));
+
+        RequestGenerator { urls, url_index_supplier, time_delay_supplier, progress: Mutex::new(progress) }
     }
 
     /// Return the next request to execute or None if no more requests need to be executed
     pub(crate) fn next(&self) -> Option<Request> {
-        // Fetch the next URL
         self.url_index_supplier.next_index()
             .map(move |i| {
                 // Extract the URL corresponding to the selected index
@@ -39,6 +47,10 @@ impl RequestGenerator {
 
                 // Determine the time delay for this request
                 let sleep = self.time_delay_supplier.next_delay();
+
+                // Bump progress
+                let progress = self.progress.lock().unwrap();
+                progress.inc(1);
 
                 Request { url, sleep }
             })

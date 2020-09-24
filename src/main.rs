@@ -8,6 +8,8 @@ use hdrhistogram::Histogram;
 use std::sync::{Mutex, Arc};
 use std::error::Error;
 use std::time::{Instant, Duration};
+use crate::requestgen::RequestGenerator;
+use std::thread::JoinHandle;
 
 mod config;
 mod requestgen;
@@ -39,10 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Wait for them to complete
-    info!("Waiting for test to complete");
-    for worker in workers {
-        worker.join().unwrap()
-    }
+    wait_for_workers(request_generator, workers);
     let bench_end = Instant::now();
 
     // Print the results of the benchmark
@@ -109,4 +108,15 @@ fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
         let millis = *micros as f64 / 1000f64;
         println!("{}%\t{}ms", p, millis);
     }
+}
+
+fn wait_for_workers(request_generator: Arc<RequestGenerator>, workers: Vec<JoinHandle<()>>) {
+    info!("Waiting for test to complete");
+    for worker in workers {
+        worker.join().unwrap()
+    }
+
+    // Note we are done
+    let progress = request_generator.progress.lock().unwrap();
+    progress.finish_with_message("done")
 }
