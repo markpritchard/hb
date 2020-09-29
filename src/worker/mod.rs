@@ -33,23 +33,31 @@ fn run(worker_id: u16, request_generator: Arc<RequestGenerator>, summary: Arc<Mu
         // Execute the request note the request latency
         let start = Instant::now();
         let response = client.get(request.url).send();
-        let end = Instant::now();
-        let duration = end.duration_since(start).as_micros() as u64;
-
-        // Update the latency histogram
-        stats.latency += duration;
 
         // Track response code statistics
+        let mut duration = 0;
         match response {
             Ok(response) => {
                 let count = stats.status.entry(response.status().as_u16()).or_insert(0);
                 *count += 1;
+
+                // Read the response and track errors
+                if let Err(e) = response.bytes() {
+                    stats.response_errors += 1;
+                    warn!("Error retrieving response for {}: {}", request.url, e);
+                }
+
+                let end = Instant::now();
+                duration = end.duration_since(start).as_micros() as u64;
             }
             Err(e) => {
-                stats.errors += 1;
+                stats.request_errors += 1;
                 warn!("Hit error processing {}: {}", request.url, e);
             }
         }
+
+        // Update the latency histogram
+        stats.latency += duration;
     }
 
     // Accumulate bench result

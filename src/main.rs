@@ -54,7 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 /// Statistics we generate during the benchmark process
 pub(crate) struct BenchResult {
     status: HashMap<u16, u32>,
-    errors: u32,
+    request_errors: u32,
+    response_errors: u32,
     latency: Histogram<u64>,
 }
 
@@ -63,7 +64,8 @@ impl BenchResult {
     pub fn new() -> BenchResult {
         BenchResult {
             status: HashMap::new(),
-            errors: 0,
+            request_errors: 0,
+            response_errors: 0,
             // We measure latency in microseconds, so configure the histogram to track 1 microsecond to 10 seconds
             latency: Histogram::<u64>::new_with_bounds(1, 1000 * 1000 * 10, 2).unwrap(),
         }
@@ -76,7 +78,8 @@ impl BenchResult {
             *total += count;
         }
 
-        self.errors += other.errors;
+        self.request_errors += other.request_errors;
+        self.response_errors += other.response_errors;
 
         self.latency.add(other.latency).unwrap();
     }
@@ -87,8 +90,11 @@ fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
     let summary = summary.lock().unwrap();
 
     // Note errors if they occurred
-    if summary.errors > 0 {
-        warn!("*** {} errors", summary.errors);
+    if summary.request_errors > 0 {
+        warn!("*** {} request errors", summary.request_errors);
+    }
+    if summary.response_errors > 0 {
+        warn!("*** {} response errors", summary.response_errors);
     }
 
     // Dump the status codes
