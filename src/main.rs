@@ -1,19 +1,16 @@
 #[macro_use]
 extern crate log;
 
-use std::sync;
-
 use std::collections::HashMap;
-use hdrhistogram::Histogram;
-use std::sync::{Mutex, Arc};
 use std::error::Error;
-use std::time::{Instant, Duration};
-use crate::requestgen::RequestGenerator;
-use std::thread::JoinHandle;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use crate::workers::BenchResult;
 
 mod config;
 mod requestgen;
-mod worker;
+mod workers;
 
 /// Parses command line arguments, launches the workers, consolidates results
 fn main() -> Result<(), Box<dyn Error>> {
@@ -23,72 +20,74 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Parse the command line and read in the set of URLs we use to test
-    let mut config = config::Config::from_cmdline()?;
+    let (config, urls) = config::Config::from_cmdline()?;
 
     // Initialise the request generator from the config
-    // Note that it consumes the URLs from config (hence the mutable ref)
-    let request_generator = sync::Arc::new(requestgen::RequestGenerator::new(&mut config));
+    let request_generator = requestgen::RequestGenerator::new(&config, urls.len());
 
-    // Initialise the summary bench result each worker will accumulate into
-    let result_summary = Arc::new(Mutex::new(BenchResult::new()));
+    // Wrap the URLs so we can share them with the worker threads and use them for reporting
+    let urls = Arc::new(urls);
 
     // Launch the workers
     let bench_start = Instant::now();
-    info!("Starting {} workers", config.concurrency);
-    let mut workers = Vec::new();
-    for id in 0..config.concurrency {
-        workers.push(worker::start(id, &request_generator, &result_summary));
-    }
-
-    // Wait for them to complete
-    wait_for_workers(request_generator, workers);
+    let result_summary = workers::run_test(config.concurrency, request_generator, &urls);
     let bench_end = Instant::now();
 
     // Print the results of the benchmark
     let bench_duration = bench_end.duration_since(bench_start);
-    print_results(bench_duration, result_summary);
+    print_results(bench_duration, &result_summary);
+
+    // Generate a report if required
+    if let Some(slow_percentile) = config.slow_percentile {
+        print_slow_report(result_summary, urls, slow_percentile);
+    }
 
     Ok(())
 }
 
-/// Statistics we generate during the benchmark process
-pub(crate) struct BenchResult {
-    status: HashMap<u16, u32>,
-    request_errors: u32,
-    response_errors: u32,
-    latency: Histogram<u64>,
-}
-
-impl BenchResult {
-    /// Initialise a new benchmark result
-    pub fn new() -> BenchResult {
-        BenchResult {
-            status: HashMap::new(),
-            request_errors: 0,
-            response_errors: 0,
-            // We measure latency in microseconds, so configure the histogram to track 1 microsecond to 10 seconds
-            latency: Histogram::<u64>::new_with_bounds(1, 1000 * 1000 * 10, 2).unwrap(),
-        }
+// Output the report
+fn print_slow_report(summary: BenchResult, urls: Arc<Vec<String>>, slow_percentile: f64) {
+    // Collect all the durations by URL
+    let mut url_stats = HashMap::new();
+    for (url_index, duration) in summary.request_times {
+        let url = urls[url_index].as_str();
+        url_stats.entry(url)
+            .or_insert_with(Vec::new)
+            .push(duration);
     }
 
-    /// Accumulate another benchmark result into this one (i.e. from a worker thread into the summary).
-    pub fn accumulate(&mut self, other: BenchResult) {
-        for (code, count) in other.status {
-            let total = self.status.entry(code).or_insert(0);
-            *total += count;
-        }
+    // Determine the lower latency bound for the request to be included in the slow requests report
+    let lower_bound = summary.latency.value_at_percentile(slow_percentile);
 
-        self.request_errors += other.request_errors;
-        self.response_errors += other.response_errors;
+    // Compute the summary stats by URL and filter to those that exceed the smallest latency cutoff
+    let mut lines = url_stats.iter()
+        .filter_map(|(url, durations)| {
+            // Compute the basic stats we need for the report line
+            let (min, max, sum) = durations.iter()
+                .fold((u64::MAX, 0, 0), |state, &duration| (state.0.min(duration), state.1.max(duration), state.2 + duration));
 
-        self.latency.add(other.latency).unwrap();
+            // If the max latency didn't exceed our lower bound then we just ignore this URL for the report
+            if max < lower_bound {
+                return None;
+            }
+
+            let count = durations.len();
+            let avg = sum / count as u64;
+            Some(ReportLine { url, count, min, max, avg })
+        })
+        .collect::<Vec<ReportLine>>();
+
+    // Sort by latency in descending order and dump out the report
+    lines.sort_by(|l, r| r.max.cmp(&l.max));
+
+    println!("\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest", slow_percentile, lower_bound / 1000);
+    for line in lines {
+        println!("{}\t{}\t{}\t{}\t{}", line.max, line.avg, line.min, line.count, line.url);
     }
 }
 
 // Output the benchmark results
-fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
-    let summary = summary.lock().unwrap();
-
+fn print_results(bench_duration: Duration, summary: &BenchResult) {
     // Note errors if they occurred
     if summary.request_errors > 0 {
         warn!("*** {} request errors", summary.request_errors);
@@ -101,7 +100,7 @@ fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
     let mut codes = summary.status.keys()
         .copied()
         .collect::<Vec<u16>>();
-    codes.sort();
+    codes.sort_unstable();
     println!("\nHTTP responses:");
     for code in codes {
         println!("{}\t{}", code, summary.status.get(&code).unwrap());
@@ -116,13 +115,10 @@ fn print_results(bench_duration: Duration, summary: Arc<Mutex<BenchResult>>) {
     }
 }
 
-fn wait_for_workers(request_generator: Arc<RequestGenerator>, workers: Vec<JoinHandle<()>>) {
-    info!("Waiting for test to complete");
-    for worker in workers {
-        worker.join().unwrap()
-    }
-
-    // Note we are done
-    let progress = request_generator.progress.lock().unwrap();
-    progress.finish_with_message("done")
+struct ReportLine<'a> {
+    url: &'a str,
+    count: usize,
+    min: u64,
+    max: u64,
+    avg: u64,
 }

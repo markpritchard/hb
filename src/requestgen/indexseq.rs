@@ -74,7 +74,6 @@ impl IndexSupplier for SequentialIndex {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     // Verifies that the random index generator creates correctly bounded values

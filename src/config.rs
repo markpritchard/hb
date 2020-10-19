@@ -7,12 +7,12 @@ use clap::Arg;
 use url::Url;
 
 pub(crate) struct Config {
-    pub urls: Vec<String>,
     pub concurrency: u16,
     pub requests: usize,
     pub order: RequestOrder,
     pub delay_ms: u32,
     pub delay_distrib: DelayDistribution,
+    pub slow_percentile: Option<f64>,
 }
 
 pub(crate) enum RequestOrder {
@@ -27,7 +27,7 @@ pub(crate) enum DelayDistribution {
 }
 
 impl Config {
-    pub(crate) fn from_cmdline() -> Result<Config, Box<dyn Error>> {
+    pub(crate) fn from_cmdline() -> Result<(Config, Vec<String>), Box<dyn Error>> {
         let matches = clap::App::new("httpbench")
             .version("0.1.0")
             .about("HTTP/S load testing tool")
@@ -90,6 +90,13 @@ impl Config {
                 .value_name("urlprefix")
                 .help("Prefix to automatically add to URLs (e.g. if your URL file contains just paths+query strings such as from a load-balancer log"))
 
+            // Generate a slow queries report - anything over the nominated latency
+            .arg(Arg::with_name("reportslow")
+                .short("s")
+                .long("reportslow")
+                .value_name("percentile")
+                .help("Generate a report of requests over a given latency"))
+
             .get_matches();
 
         // Extract the URLs
@@ -111,8 +118,13 @@ impl Config {
             "ne" => DelayDistribution::NegativeExponential,
             _ => DelayDistribution::Constant
         };
+        let slow_percentile = matches.value_of("reportslow").map(|v| v.parse::<f64>().unwrap());
 
-        Ok(Config { urls, concurrency, requests, order, delay_ms, delay_distrib })
+        let result = (
+            Config { concurrency, requests, order, delay_ms, delay_distrib, slow_percentile },
+            urls
+        );
+        Ok(result)
     }
 }
 
