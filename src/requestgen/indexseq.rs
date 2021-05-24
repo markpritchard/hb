@@ -38,7 +38,7 @@ impl IndexSupplier for RandomIndex {
 
         // Extract the next URL if we haven't generated sufficient URLs
         if count < self.requests {
-            Some(thread_rng().gen_range(0, self.limit))
+            Some(thread_rng().gen_range(0..self.limit))
         } else {
             None
         }

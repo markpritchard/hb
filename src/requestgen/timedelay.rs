@@ -54,7 +54,7 @@ impl TimeDelaySupplier for NegativeExponentialDelay {
     // http://perfdynamics.blogspot.com/2012/03/how-to-generate-exponential-delays.html
     fn next_delay(&self) -> Duration {
         // Generate next delay time
-        let u = thread_rng().gen_range(0f64, 1f64);
+        let u = thread_rng().gen_range(0f64..1f64);
         let t = (self.z_neg * u.ln()) as u64;
         Duration::from_micros(t)
     }
@@ -73,7 +73,7 @@ impl UniformDelay {
 
 impl TimeDelaySupplier for UniformDelay {
     fn next_delay(&self) -> Duration {
-        let delay_us = thread_rng().gen_range(0, self.bound_us);
+        let delay_us = thread_rng().gen_range(0..self.bound_us);
         Duration::from_micros(delay_us as u64)
     }
 }

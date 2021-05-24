@@ -147,7 +147,7 @@ fn load_urls(url_prefix: Option<&str>, url_file: Option<&str>, args_urls: Option
                 // Nothing required in the OK case
                 Ok(_) => {}
                 // If no base, then fix
-                Err(url::ParseError::RelativeUrlWithoutBase) => *url = base.join(url)?.into_string(),
+                Err(url::ParseError::RelativeUrlWithoutBase) => *url = base.join(url)?.into(),
                 Err(e) => return Err(Box::new(e)),
             }
         }
