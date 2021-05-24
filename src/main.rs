@@ -30,6 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Launch the workers
     let bench_start = Instant::now();
+    info!("Running test");
     let result_summary = workers::run_test(config.concurrency, request_generator, &urls);
     let bench_end = Instant::now();
 
@@ -80,7 +81,7 @@ fn print_slow_report(summary: BenchResult, urls: Arc<Vec<String>>, slow_percenti
     // Sort by latency in descending order and dump out the report
     lines.sort_by(|l, r| r.max.cmp(&l.max));
 
-    println!("\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest", slow_percentile, lower_bound / 1000);
+    println!("\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest", slow_percentile, lower_bound);
     for line in lines {
         println!("{}\t{}\t{}\t{}\t{}", line.max, line.avg, line.min, line.count, line.url);
     }
@@ -109,8 +110,7 @@ fn print_results(bench_duration: Duration, summary: &BenchResult) {
     // Dump the latency
     println!("\nBenchmark run time {}s.\nLatency:", bench_duration.as_secs_f32());
     for p in &[50f64, 75f64, 95f64, 99f64, 99.9f64, 99.99f64, 99.999f64, 100f64] {
-        let micros = &summary.latency.value_at_percentile(*p);
-        let millis = *micros as f64 / 1000f64;
+        let millis = &summary.latency.value_at_percentile(*p);
         println!("{}%\t{}ms", p, millis);
     }
 }

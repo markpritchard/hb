@@ -141,14 +141,20 @@ fn load_urls(url_prefix: Option<&str>, url_file: Option<&str>, args_urls: Option
 
     // Prefix as required
     if let Some(url_prefix) = url_prefix {
+        info!("Applying prefixes");
         let base = Url::parse(url_prefix)?;
         for url in urls.iter_mut() {
             match Url::parse(url) {
                 // Nothing required in the OK case
                 Ok(_) => {}
                 // If no base, then fix
-                Err(url::ParseError::RelativeUrlWithoutBase) => *url = base.join(url)?.into(),
-                Err(e) => return Err(Box::new(e)),
+                Err(url::ParseError::RelativeUrlWithoutBase) => {
+                    match base.join(url) {
+                        Ok(prefixed) => *url = prefixed.into(),
+                        Err(e) => warn!("URL {} is invalid: {}", url, e),
+                    }
+                },
+                Err(e) => warn!("URL {} is invalid: {}", url, e),
             }
         }
     }

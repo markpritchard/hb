@@ -23,8 +23,8 @@ impl BenchResult {
             status: HashMap::new(),
             request_errors: 0,
             response_errors: 0,
-            // We measure latency in microseconds, so configure the histogram to track 1 microsecond to 10 seconds
-            latency: Histogram::<u64>::new_with_bounds(1, 1000 * 1000 * 10, 2).unwrap(),
+            // We measure latency in milliseconds, so configure the histogram to track 1 millisecond to 100 seconds
+            latency: Histogram::<u64>::new_with_bounds(1, 1000 * 100, 2).unwrap(),
             request_times: Vec::new(),
         }
     }
@@ -101,7 +101,7 @@ fn run_worker(worker_id: u16, request_generator: Arc<RequestGenerator>, urls: Ar
                 }
 
                 let end = Instant::now();
-                duration = end.duration_since(start).as_micros() as u64;
+                duration = end.duration_since(start).as_millis() as u64;
             }
             Err(e) => {
                 result.request_errors += 1;
