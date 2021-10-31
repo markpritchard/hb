@@ -2,7 +2,7 @@
 name = "hb"
 version = "0.1.0"
 authors = ["Mark Pritchard <mpritcha@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 assert_approx_eq = "1.1"
