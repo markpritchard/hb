@@ -47,7 +47,11 @@ impl BenchResult {
 }
 
 /// Starts workers that pull requests from the generator, runs them and tracks benchmark statistics
-pub(crate) fn run_test(concurrency: u16, request_generator: RequestGenerator, urls: &Arc<Vec<String>>) -> BenchResult {
+pub(crate) fn run_test(
+    concurrency: u16,
+    request_generator: RequestGenerator,
+    urls: &Arc<Vec<String>>,
+) -> BenchResult {
     let request_generator = Arc::new(request_generator);
 
     let mut workers = Vec::new();
@@ -69,7 +73,11 @@ pub(crate) fn run_test(concurrency: u16, request_generator: RequestGenerator, ur
     merged
 }
 
-fn run_worker(worker_id: u16, request_generator: Arc<RequestGenerator>, urls: Arc<Vec<String>>) -> BenchResult {
+fn run_worker(
+    worker_id: u16,
+    request_generator: Arc<RequestGenerator>,
+    urls: Arc<Vec<String>>,
+) -> BenchResult {
     let mut result = BenchResult::new();
 
     // Execute requests until we are done
