@@ -1,11 +1,15 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 use crate::config::RequestOrder;
 
 /// Creates an index supplier based on the nominated request order etc
-pub(crate) fn create_supplier(order: &RequestOrder, index_limit: usize, num_requests: usize) -> Box<dyn IndexSupplier> {
+pub(crate) fn create_supplier(
+    order: &RequestOrder,
+    index_limit: usize,
+    num_requests: usize,
+) -> Box<dyn IndexSupplier> {
     match order {
         RequestOrder::Sequential => Box::new(SequentialIndex::new(index_limit, num_requests)),
         RequestOrder::Random => Box::new(RandomIndex::new(index_limit, num_requests)),
@@ -13,7 +17,7 @@ pub(crate) fn create_supplier(order: &RequestOrder, index_limit: usize, num_requ
 }
 
 /// Returns the next index into the URL list
-pub(crate) trait IndexSupplier : Send {
+pub(crate) trait IndexSupplier: Send {
     // Return the next index or None if no more URLs need to be generated
     fn next_index(&self) -> Option<usize>;
 }
@@ -27,7 +31,11 @@ struct RandomIndex {
 
 impl RandomIndex {
     pub fn new(limit: usize, requests: usize) -> RandomIndex {
-        RandomIndex { count: AtomicUsize::new(0), limit, requests }
+        RandomIndex {
+            count: AtomicUsize::new(0),
+            limit,
+            requests,
+        }
     }
 }
 
@@ -54,7 +62,11 @@ struct SequentialIndex {
 
 impl SequentialIndex {
     pub fn new(limit: usize, requests: usize) -> SequentialIndex {
-        SequentialIndex { next: AtomicUsize::new(0), limit, requests }
+        SequentialIndex {
+            next: AtomicUsize::new(0),
+            limit,
+            requests,
+        }
     }
 }
 
@@ -98,7 +110,7 @@ mod tests {
         while let Some(i) = index_generator.next_index() {
             actual.push(i);
         }
-        let expected: Vec<usize> = vec!(0, 1, 0, 1, 0);
+        let expected: Vec<usize> = vec![0, 1, 0, 1, 0];
         assert_eq!(expected, actual);
     }
 }

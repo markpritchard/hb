@@ -101,40 +101,57 @@ impl Config {
 
         // Extract the URLs
         let url_prefix = matches.value_of("urlprefix");
-        let args_urls: Option<Vec<&str>> = matches.values_of("urls").map(|v| v.collect::<Vec<&str>>());
+        let args_urls: Option<Vec<&str>> =
+            matches.values_of("urls").map(|v| v.collect::<Vec<&str>>());
         let urls = load_urls(url_prefix, matches.value_of("urlfile"), args_urls)?;
 
         // Grab basic params
         // TODO cleanup parsing of these arguments
-        let concurrency: u16 = matches.value_of("concurrency").unwrap().parse::<>().unwrap();
-        let requests: usize = matches.value_of("requests").unwrap().parse::<>().unwrap();
+        let concurrency: u16 = matches.value_of("concurrency").unwrap().parse().unwrap();
+        let requests: usize = matches.value_of("requests").unwrap().parse().unwrap();
         let order = match matches.value_of("order").unwrap() {
             "s" => RequestOrder::Sequential,
-            _ => RequestOrder::Random
+            _ => RequestOrder::Random,
         };
-        let delay_ms: u32 = matches.value_of("delay").unwrap().parse::<>().unwrap();
+        let delay_ms: u32 = matches.value_of("delay").unwrap().parse().unwrap();
         let delay_distrib = match matches.value_of("delaydist").unwrap() {
             "u" => DelayDistribution::Uniform,
             "ne" => DelayDistribution::NegativeExponential,
-            _ => DelayDistribution::Constant
+            _ => DelayDistribution::Constant,
         };
-        let slow_percentile = matches.value_of("reportslow").map(|v| v.parse::<f64>().unwrap());
+        let slow_percentile = matches
+            .value_of("reportslow")
+            .map(|v| v.parse::<f64>().unwrap());
 
         let result = (
-            Config { concurrency, requests, order, delay_ms, delay_distrib, slow_percentile },
-            urls
+            Config {
+                concurrency,
+                requests,
+                order,
+                delay_ms,
+                delay_distrib,
+                slow_percentile,
+            },
+            urls,
         );
         Ok(result)
     }
 }
 
-fn load_urls(url_prefix: Option<&str>, url_file: Option<&str>, args_urls: Option<Vec<&str>>) -> Result<Vec<String>, Box<dyn Error>> {
+fn load_urls(
+    url_prefix: Option<&str>,
+    url_file: Option<&str>,
+    args_urls: Option<Vec<&str>>,
+) -> Result<Vec<String>, Box<dyn Error>> {
     // Read from a file, or just collect the URLs on the command line
     let mut urls: Vec<String> = if let Some(url_file) = url_file {
         info!("Loading URLs from {}", url_file);
         // TODO better error handling
         let file = fs::File::open(url_file).unwrap();
-        io::BufReader::new(file).lines().map(|l| l.unwrap()).collect()
+        io::BufReader::new(file)
+            .lines()
+            .map(|l| l.unwrap())
+            .collect()
     } else {
         args_urls.unwrap().iter().map(|s| (*s).to_owned()).collect()
     };
@@ -148,11 +165,9 @@ fn load_urls(url_prefix: Option<&str>, url_file: Option<&str>, args_urls: Option
                 // Nothing required in the OK case
                 Ok(_) => {}
                 // If no base, then fix
-                Err(url::ParseError::RelativeUrlWithoutBase) => {
-                    match base.join(url) {
-                        Ok(prefixed) => *url = prefixed.into(),
-                        Err(e) => warn!("URL {} is invalid: {}", url, e),
-                    }
+                Err(url::ParseError::RelativeUrlWithoutBase) => match base.join(url) {
+                    Ok(prefixed) => *url = prefixed.into(),
+                    Err(e) => warn!("URL {} is invalid: {}", url, e),
                 },
                 Err(e) => warn!("URL {} is invalid: {}", url, e),
             }
@@ -171,7 +186,7 @@ mod tests {
     fn url_prefix() {
         let prefix = "http://localhost:8070/";
         let expected = "http://localhost:8070/abc123?def=456";
-        let urls = vec!(expected, "abc123?def=456", "/abc123?def=456");
+        let urls = vec![expected, "abc123?def=456", "/abc123?def=456"];
 
         let loaded = load_urls(Some(prefix), None, Some(urls)).unwrap();
         for test in loaded {

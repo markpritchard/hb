@@ -24,30 +24,36 @@ impl RequestGenerator {
         let url_index_supplier = indexseq::create_supplier(&config.order, urls_count, num_requests);
 
         // Create the time delay supplier used to schedule the next request
-        let time_delay_supplier = timedelay::create_supplier(&config.delay_ms, &config.delay_distrib);
+        let time_delay_supplier =
+            timedelay::create_supplier(&config.delay_ms, &config.delay_distrib);
 
         // Initialise the request generator
         let progress = ProgressBar::new(num_requests as u64);
-        progress.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .progress_chars("#>-"));
+        progress.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                .progress_chars("#>-"),
+        );
 
-        RequestGenerator { url_index_supplier, time_delay_supplier, progress: Mutex::new(progress) }
+        RequestGenerator {
+            url_index_supplier,
+            time_delay_supplier,
+            progress: Mutex::new(progress),
+        }
     }
 
     /// Return the next request to execute or None if no more requests need to be executed
     pub(crate) fn next(&self) -> Option<Request> {
-        self.url_index_supplier.next_index()
-            .map(move |url_index| {
-                // Determine the time delay for this request
-                let sleep = self.time_delay_supplier.next_delay();
+        self.url_index_supplier.next_index().map(move |url_index| {
+            // Determine the time delay for this request
+            let sleep = self.time_delay_supplier.next_delay();
 
-                // Bump progress
-                let progress = self.progress.lock().unwrap();
-                progress.inc(1);
+            // Bump progress
+            let progress = self.progress.lock().unwrap();
+            progress.inc(1);
 
-                Request { url_index, sleep }
-            })
+            Request { url_index, sleep }
+        })
     }
 }
 
@@ -82,7 +88,11 @@ mod tests {
             slow_percentile: None,
         };
 
-        let urls = vec!("http://one".to_string(), "http://two".to_string(), "http://three".to_string());
+        let urls = vec![
+            "http://one".to_string(),
+            "http://two".to_string(),
+            "http://three".to_string(),
+        ];
 
         let generator = RequestGenerator::new(&config, urls.len());
         assert_eq!(0, generator.next().unwrap().url_index);

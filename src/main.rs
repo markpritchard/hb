@@ -52,20 +52,24 @@ fn print_slow_report(summary: BenchResult, urls: Arc<Vec<String>>, slow_percenti
     let mut url_stats = HashMap::new();
     for (url_index, duration) in summary.request_times {
         let url = urls[url_index].as_str();
-        url_stats.entry(url)
-            .or_insert_with(Vec::new)
-            .push(duration);
+        url_stats.entry(url).or_insert_with(Vec::new).push(duration);
     }
 
     // Determine the lower latency bound for the request to be included in the slow requests report
     let lower_bound = summary.latency.value_at_percentile(slow_percentile);
 
     // Compute the summary stats by URL and filter to those that exceed the smallest latency cutoff
-    let mut lines = url_stats.iter()
+    let mut lines = url_stats
+        .iter()
         .filter_map(|(url, durations)| {
             // Compute the basic stats we need for the report line
-            let (min, max, sum) = durations.iter()
-                .fold((u64::MAX, 0, 0), |state, &duration| (state.0.min(duration), state.1.max(duration), state.2 + duration));
+            let (min, max, sum) = durations.iter().fold((u64::MAX, 0, 0), |state, &duration| {
+                (
+                    state.0.min(duration),
+                    state.1.max(duration),
+                    state.2 + duration,
+                )
+            });
 
             // If the max latency didn't exceed our lower bound then we just ignore this URL for the report
             if max < lower_bound {
@@ -74,16 +78,28 @@ fn print_slow_report(summary: BenchResult, urls: Arc<Vec<String>>, slow_percenti
 
             let count = durations.len();
             let avg = sum / count as u64;
-            Some(ReportLine { url, count, min, max, avg })
+            Some(ReportLine {
+                url,
+                count,
+                min,
+                max,
+                avg,
+            })
         })
         .collect::<Vec<ReportLine>>();
 
     // Sort by latency in descending order and dump out the report
     lines.sort_by(|l, r| r.max.cmp(&l.max));
 
-    println!("\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest", slow_percentile, lower_bound);
+    println!(
+        "\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest",
+        slow_percentile, lower_bound
+    );
     for line in lines {
-        println!("{}\t{}\t{}\t{}\t{}", line.max, line.avg, line.min, line.count, line.url);
+        println!(
+            "{}\t{}\t{}\t{}\t{}",
+            line.max, line.avg, line.min, line.count, line.url
+        );
     }
 }
 
@@ -98,9 +114,7 @@ fn print_results(bench_duration: Duration, summary: &BenchResult) {
     }
 
     // Dump the status codes
-    let mut codes = summary.status.keys()
-        .copied()
-        .collect::<Vec<u16>>();
+    let mut codes = summary.status.keys().copied().collect::<Vec<u16>>();
     codes.sort_unstable();
     println!("\nHTTP responses:");
     for code in codes {
@@ -108,8 +122,13 @@ fn print_results(bench_duration: Duration, summary: &BenchResult) {
     }
 
     // Dump the latency
-    println!("\nBenchmark run time {}s.\nLatency:", bench_duration.as_secs_f32());
-    for p in &[50f64, 75f64, 95f64, 99f64, 99.9f64, 99.99f64, 99.999f64, 100f64] {
+    println!(
+        "\nBenchmark run time {}s.\nLatency:",
+        bench_duration.as_secs_f32()
+    );
+    for p in &[
+        50f64, 75f64, 95f64, 99f64, 99.9f64, 99.99f64, 99.999f64, 100f64,
+    ] {
         let millis = &summary.latency.value_at_percentile(*p);
         println!("{}%\t{}ms", p, millis);
     }

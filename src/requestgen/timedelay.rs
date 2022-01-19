@@ -1,11 +1,14 @@
 use std::time::Duration;
 
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 
 use crate::config::DelayDistribution;
 
 /// Creates a time delay supplier based on the requested delay etc
-pub(crate) fn create_supplier(delay_ms: &u32, distrib: &DelayDistribution) -> Box<dyn TimeDelaySupplier> {
+pub(crate) fn create_supplier(
+    delay_ms: &u32,
+    distrib: &DelayDistribution,
+) -> Box<dyn TimeDelaySupplier> {
     let delay_us = *delay_ms as u64 * 1000u64;
     match distrib {
         DelayDistribution::Constant => Box::new(ConstantDelay::new(delay_us)),
@@ -15,13 +18,13 @@ pub(crate) fn create_supplier(delay_ms: &u32, distrib: &DelayDistribution) -> Bo
 }
 
 /// Generates a time delay from the underlying distribution
-pub(crate) trait TimeDelaySupplier : Send {
+pub(crate) trait TimeDelaySupplier: Send {
     fn next_delay(&self) -> Duration;
 }
 
 // A fixed delay
 struct ConstantDelay {
-    delay: Duration
+    delay: Duration,
 }
 
 impl ConstantDelay {
