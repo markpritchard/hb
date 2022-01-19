@@ -13,7 +13,7 @@ pub(crate) fn create_supplier(order: &RequestOrder, index_limit: usize, num_requ
 }
 
 /// Returns the next index into the URL list
-pub(crate) trait IndexSupplier {
+pub(crate) trait IndexSupplier : Send {
     // Return the next index or None if no more URLs need to be generated
     fn next_index(&self) -> Option<usize>;
 }
