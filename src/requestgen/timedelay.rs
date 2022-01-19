@@ -15,7 +15,7 @@ pub(crate) fn create_supplier(delay_ms: &u32, distrib: &DelayDistribution) -> Bo
 }
 
 /// Generates a time delay from the underlying distribution
-pub(crate) trait TimeDelaySupplier {
+pub(crate) trait TimeDelaySupplier : Send {
     fn next_delay(&self) -> Duration;
 }
 
