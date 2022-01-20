@@ -51,6 +51,16 @@ alias rust-musl-builder='docker run --rm -it -v "$(pwd)":/home/rust/src ekidd/ru
 rust-musl-builder cargo build --release
 ```
 
+#### Compiling locally
+To compile it locally you'll need following dependencies
+- pkg-config
+- libssl-dev
+
+On a clean Ubuntu 20.04 system, they can be installed by running
+```
+sudo apt install pkg-config libssl-dev
+```
+
 ### Running
 
 Execute `./hb -h` to view usage.
