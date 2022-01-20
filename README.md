@@ -71,4 +71,4 @@ This project is licensed under the [MIT license](LICENSE.txt).
 
 ## Acknowledgments
 
-My gratitude to my employer [SEEK](seek.com.au) who provided time and hardware to build the initial version of this tool, and an environment where we can engage in interesting work and tackle cool problems.
+My gratitude to my employer [SEEK](https://seek.com.au) who provided time and hardware to build the initial version of this tool, and an environment where we can engage in interesting work and tackle cool problems.
