@@ -4,6 +4,9 @@ use std::thread;
 use std::time::Instant;
 
 use hdrhistogram::Histogram;
+use reqwest::Method;
+use HttpMethod::{Delete, Get, Post, Put};
+use crate::config::HttpMethod;
 
 use crate::requestgen::RequestGenerator;
 
@@ -48,9 +51,11 @@ impl BenchResult {
 
 /// Starts workers that pull requests from the generator, runs them and tracks benchmark statistics
 pub(crate) fn run_test(
+    http_method: HttpMethod,
     concurrency: u16,
     request_generator: RequestGenerator,
     urls: &Arc<Vec<String>>,
+    payloads: &Arc<Vec<String>>,
 ) -> BenchResult {
     let request_generator = Arc::new(request_generator);
 
@@ -58,8 +63,9 @@ pub(crate) fn run_test(
     for worker_id in 0..concurrency {
         let request_generator = request_generator.clone();
         let urls = urls.clone();
+        let payloads = payloads.clone();
         workers.push(thread::spawn(move || {
-            run_worker(worker_id, request_generator, urls)
+            run_worker(worker_id, request_generator, http_method, urls, payloads)
         }));
     }
 
@@ -76,7 +82,9 @@ pub(crate) fn run_test(
 fn run_worker(
     worker_id: u16,
     request_generator: Arc<RequestGenerator>,
+    http_method: HttpMethod,
     urls: Arc<Vec<String>>,
+    payloads: Arc<Vec<String>>,
 ) -> BenchResult {
     let mut result = BenchResult::new();
 
@@ -90,10 +98,33 @@ fn run_worker(
             thread::sleep(request.sleep);
         }
 
+        let url = match http_method {
+            // Use the first url for all POST and PUT requests
+            Post | Put => urls[0].as_str(),
+            _ => urls[request.url_index].as_str()
+        };
+
+        let reqwest_method = match http_method {
+            Get    => Method::GET,
+            Post   => Method::POST,
+            Put    => Method::PUT,
+            Delete => Method::DELETE,
+        };
+        let request_builder = client.request(reqwest_method, url);
+
         // Execute the request note the request latency
-        let url = urls[request.url_index].as_str();
         let start = Instant::now();
-        let response = client.get(url).send();
+        let response = match http_method {
+            Post | Put => {
+                // Set request payload for POST and PUT
+                let payload = payloads[request.url_index].clone();
+                // TODO: allow user to override POST request content-type
+                request_builder.body(payload).header("Content-Type", "application/json").send()
+            },
+            _ => {
+                request_builder.send()
+            }
+        };
 
         // Track response code statistics
         let mut duration = 0;
