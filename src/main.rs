@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 
+use crate::config::HttpMethod;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
@@ -19,15 +20,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Parse the command line and read in the set of URLs we use to test
-    let (config, urls) = config::Config::from_cmdline()?;
+    let (config, urls, payloads) = config::Config::from_cmdline()?;
+
+    // When testing POST or PUT, the total number of distinct requests should be the size of payloads list
+    let distinct_requests_count = match config.http_method {
+        HttpMethod::Post | HttpMethod::Put => payloads.len(),
+        _ => urls.len(),
+    };
 
     // Initialise the request generator from the config
-    let request_generator = requestgen::RequestGenerator::new(&config, urls.len());
+    let request_generator = requestgen::RequestGenerator::new(&config, distinct_requests_count);
 
     // Launch the workers
     let bench_start = Instant::now();
     info!("Running test");
-    let result_summary = workers::run_test(config.concurrency, &request_generator, &urls);
+    let result_summary = workers::run_test(
+        config.http_method,
+        config.concurrency,
+        &request_generator,
+        &urls,
+        &payloads,
+    );
     let bench_end = Instant::now();
 
     // Print the results of the benchmark

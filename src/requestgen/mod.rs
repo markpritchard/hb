@@ -73,7 +73,7 @@ unsafe impl Sync for RequestGenerator {}
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{DelayDistribution, RequestOrder};
+    use crate::config::{DelayDistribution, HttpMethod, RequestOrder};
 
     use super::*;
 
@@ -87,6 +87,7 @@ mod tests {
             delay_ms: 1,
             delay_distrib: DelayDistribution::Constant,
             slow_percentile: None,
+            http_method: HttpMethod::Get,
         };
 
         let urls = vec![
