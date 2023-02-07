@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fs;
 use std::io;
 use std::io::BufRead;
+use std::str::FromStr;
 
 use clap::Arg;
 use url::Url;
@@ -13,6 +14,28 @@ pub(crate) struct Config {
     pub delay_ms: u32,
     pub delay_distrib: DelayDistribution,
     pub slow_percentile: Option<f64>,
+    pub http_method: HttpMethod,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum HttpMethod {
+    Get,
+    Post,
+    Put,
+}
+
+impl FromStr for HttpMethod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let upper_case = s.to_uppercase();
+        match upper_case.as_str() {
+            "GET" => Ok(HttpMethod::Get),
+            "POST" => Ok(HttpMethod::Post),
+            "PUT" => Ok(HttpMethod::Put),
+            _ => Err(()),
+        }
+    }
 }
 
 pub(crate) enum RequestOrder {
@@ -26,8 +49,14 @@ pub(crate) enum DelayDistribution {
     NegativeExponential,
 }
 
+/// Declare a type for this complex tuple. The 3 values are:
+///  - config
+///  - urls
+///  - payloads
+type LoadTestContext = (Config, Vec<String>, Vec<String>);
+
 impl Config {
-    pub(crate) fn from_cmdline() -> Result<(Config, Vec<String>), Box<dyn Error>> {
+    pub(crate) fn from_cmdline() -> Result<LoadTestContext, Box<dyn Error>> {
         let matches = clap::App::new("httpbench")
             .version("0.1.0")
             .about("HTTP/S load testing tool")
@@ -97,6 +126,21 @@ impl Config {
                 .value_name("percentile")
                 .help("Generate a report of requests over a given latency"))
 
+            .arg(Arg::new("http_method")
+                .short('m')
+                .long("method")
+                .value_name("http_method")
+                .possible_values(["GET", "POST", "PUT"])
+                .default_value("GET")
+                .help("The HTTP method used for this test. Only GET, POST, and PUT are currently supported. \
+                          When [http_method] is set to POST or PUT only the first url is used for all requests, and you must \
+                          also supply 'payloads' argument."))
+
+            .arg(Arg::new("payloads")
+                .long("payloads")
+                .value_name("payload file path")
+                .help("The payload for POST and PUT requests. Each request in the test takes one line in this file as payload."))
+
             .get_matches();
 
         // Extract the URLs
@@ -123,6 +167,37 @@ impl Config {
             .value_of("reportslow")
             .map(|v| v.parse::<f64>().unwrap());
 
+        let http_method = HttpMethod::from_str(matches.value_of("http_method").unwrap())
+            .expect("Unsupported http method");
+
+        let payloads = match matches.value_of("payloads") {
+            Some(payloads_file) => {
+                info!("Loading payloads from {}", payloads_file);
+                let file = fs::File::open(payloads_file);
+                match file {
+                    Ok(file) => io::BufReader::new(file)
+                        .lines()
+                        .map(|l| l.unwrap())
+                        .collect(),
+                    // If we are unable to load 'payloads' file simply exit
+                    Err(error) => panic!("Unable to open file: {:?}", error),
+                }
+            }
+            None => {
+                vec![]
+            }
+        };
+
+        match http_method {
+            HttpMethod::Post | HttpMethod::Put => {
+                assert!(
+                    !payloads.is_empty(),
+                    "Payloads must be supplied when http_method is set to POST or PUT"
+                );
+            }
+            _ => {}
+        }
+
         let result = (
             Config {
                 concurrency,
@@ -131,8 +206,10 @@ impl Config {
                 delay_ms,
                 delay_distrib,
                 slow_percentile,
+                http_method,
             },
             urls,
+            payloads,
         );
         Ok(result)
     }
