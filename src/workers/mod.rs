@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
@@ -49,24 +48,20 @@ impl BenchResult {
 /// Starts workers that pull requests from the generator, runs them and tracks benchmark statistics
 pub(crate) fn run_test(
     concurrency: u16,
-    request_generator: RequestGenerator,
-    urls: &Arc<Vec<String>>,
+    request_generator: &RequestGenerator,
+    urls: &[String],
 ) -> BenchResult {
-    let request_generator = Arc::new(request_generator);
-
-    let mut workers = Vec::new();
+    let mut results = Vec::new();
     for worker_id in 0..concurrency {
-        let request_generator = request_generator.clone();
-        let urls = urls.clone();
-        workers.push(thread::spawn(move || {
-            run_worker(worker_id, request_generator, urls)
-        }));
+        thread::scope(|s| {
+            let x = s.spawn(|| run_worker(worker_id, request_generator, urls));
+            results.push(x.join().unwrap());
+        });
     }
 
     // Combine all the individual test results
     let mut merged = BenchResult::new();
-    for worker in workers {
-        let mut result = worker.join().unwrap();
+    for mut result in results {
         result.add_to(&mut merged);
     }
 
@@ -75,8 +70,8 @@ pub(crate) fn run_test(
 
 fn run_worker(
     worker_id: u16,
-    request_generator: Arc<RequestGenerator>,
-    urls: Arc<Vec<String>>,
+    request_generator: &RequestGenerator,
+    urls: &[String],
 ) -> BenchResult {
     let mut result = BenchResult::new();
 
