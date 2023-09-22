@@ -49,7 +49,7 @@ impl Config {
             .arg(Arg::new("order")
                 .short('o')
                 .value_name("order")
-                .possible_values(&["r", "s"])
+                .possible_values(["r", "s"])
                 .default_value("r")
                 .help("order in which to request URLs: r=random, s=sequential"))
 
@@ -65,7 +65,7 @@ impl Config {
                 .short('d')
                 .long("delay-dist")
                 .value_name("distribution")
-                .possible_values(&["c", "u", "ne"])
+                .possible_values(["c", "u", "ne"])
                 .default_value("c")
                 .requires("delay")
                 .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))

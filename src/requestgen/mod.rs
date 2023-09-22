@@ -31,7 +31,8 @@ impl RequestGenerator {
         let progress = ProgressBar::new(num_requests as u64);
         progress.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})").unwrap()
+                .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                .unwrap()
                 .progress_chars("#>-"),
         );
 

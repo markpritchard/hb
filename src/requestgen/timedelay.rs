@@ -77,7 +77,7 @@ impl UniformDelay {
 impl TimeDelaySupplier for UniformDelay {
     fn next_delay(&self) -> Duration {
         let delay_us = thread_rng().gen_range(0..self.bound_us);
-        Duration::from_micros(delay_us as u64)
+        Duration::from_micros(delay_us)
     }
 }
 
