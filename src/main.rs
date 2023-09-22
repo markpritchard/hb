@@ -3,7 +3,6 @@ extern crate log;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::workers::BenchResult;
@@ -25,13 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialise the request generator from the config
     let request_generator = requestgen::RequestGenerator::new(&config, urls.len());
 
-    // Wrap the URLs so we can share them with the worker threads and use them for reporting
-    let urls = Arc::new(urls);
-
     // Launch the workers
     let bench_start = Instant::now();
     info!("Running test");
-    let result_summary = workers::run_test(config.concurrency, request_generator, &urls);
+    let result_summary = workers::run_test(config.concurrency, &request_generator, &urls);
     let bench_end = Instant::now();
 
     // Print the results of the benchmark
@@ -40,14 +36,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Generate a report if required
     if let Some(slow_percentile) = config.slow_percentile {
-        print_slow_report(result_summary, urls, slow_percentile);
+        print_slow_report(result_summary, &urls, slow_percentile);
     }
 
     Ok(())
 }
 
 // Output the report
-fn print_slow_report(summary: BenchResult, urls: Arc<Vec<String>>, slow_percentile: f64) {
+fn print_slow_report(summary: BenchResult, urls: &[String], slow_percentile: f64) {
     // Collect all the durations by URL
     let mut url_stats = HashMap::new();
     for (url_index, duration) in summary.request_times {
