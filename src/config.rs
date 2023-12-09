@@ -3,7 +3,8 @@ use std::fs;
 use std::io;
 use std::io::BufRead;
 
-use clap::Arg;
+use clap::builder::PossibleValuesParser;
+use clap::{value_parser, Arg};
 use url::Url;
 
 pub(crate) struct Config {
@@ -28,11 +29,12 @@ pub(crate) enum DelayDistribution {
 
 impl Config {
     pub(crate) fn from_cmdline() -> Result<(Config, Vec<String>), Box<dyn Error>> {
-        let matches = clap::App::new("httpbench")
+        let matches = clap::Command::new("httpbench")
             .version("0.1.0")
             .about("HTTP/S load testing tool")
             // Number of concurrent requests / workers
             .arg(Arg::new("concurrency")
+                .value_parser(value_parser!(u16))
                 .short('c')
                 .value_name("concurrency")
                 .default_value("10")
@@ -40,6 +42,7 @@ impl Config {
 
             // Number of requests to execute
             .arg(Arg::new("requests")
+                .value_parser(value_parser!(usize))
                 .short('n')
                 .value_name("requests")
                 .default_value("100")
@@ -47,14 +50,15 @@ impl Config {
 
             // Order of requests
             .arg(Arg::new("order")
+                .value_parser(PossibleValuesParser::new(["r", "s"]))
                 .short('o')
                 .value_name("order")
-                .possible_values(["r", "s"])
                 .default_value("r")
                 .help("order in which to request URLs: r=random, s=sequential"))
 
             // Time delay between request *dispatch*
             .arg(Arg::new("delay")
+                .value_parser(value_parser!(u32))
                 .short('t')
                 .long("delay-time")
                 .value_name("ms")
@@ -65,7 +69,7 @@ impl Config {
                 .short('d')
                 .long("delay-dist")
                 .value_name("distribution")
-                .possible_values(["c", "u", "ne"])
+                .value_parser(PossibleValuesParser::new(["c", "u", "ne"]))
                 .default_value("c")
                 .requires("delay")
                 .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
@@ -80,7 +84,6 @@ impl Config {
                 .help("file containing URLs to request"))
             .arg(Arg::new("urls")
                 .index(1)
-                .min_values(0)
                 .value_name("URL"))
 
             // Prefix for URLs
@@ -92,6 +95,7 @@ impl Config {
 
             // Generate a slow queries report - anything over the nominated latency
             .arg(Arg::new("reportslow")
+                .value_parser(value_parser!(f64))
                 .short('s')
                 .long("reportslow")
                 .value_name("percentile")
@@ -100,28 +104,26 @@ impl Config {
             .get_matches();
 
         // Extract the URLs
-        let url_prefix = matches.value_of("urlprefix");
-        let args_urls: Option<Vec<&str>> =
-            matches.values_of("urls").map(|v| v.collect::<Vec<&str>>());
-        let urls = load_urls(url_prefix, matches.value_of("urlfile"), args_urls)?;
+        let url_prefix = matches.get_one("urlprefix").copied();
+        let url_file = matches.get_one("urlfile").copied();
+        let args_urls: Option<Vec<&str>> = matches.get_many("urls").map(|v| v.copied().collect());
+        let urls = load_urls(url_prefix, url_file, args_urls)?;
 
         // Grab basic params
         // TODO cleanup parsing of these arguments
-        let concurrency: u16 = matches.value_of("concurrency").unwrap().parse().unwrap();
-        let requests: usize = matches.value_of("requests").unwrap().parse().unwrap();
-        let order = match matches.value_of("order").unwrap() {
+        let concurrency: u16 = *matches.get_one("concurrency").unwrap();
+        let requests: usize = *matches.get_one("requests").unwrap();
+        let order = match matches.get_one("order").copied().unwrap() {
             "s" => RequestOrder::Sequential,
             _ => RequestOrder::Random,
         };
-        let delay_ms: u32 = matches.value_of("delay").unwrap().parse().unwrap();
-        let delay_distrib = match matches.value_of("delaydist").unwrap() {
+        let delay_ms: u32 = *matches.get_one("delay").unwrap();
+        let delay_distrib = match matches.get_one("delaydist").copied().unwrap() {
             "u" => DelayDistribution::Uniform,
             "ne" => DelayDistribution::NegativeExponential,
             _ => DelayDistribution::Constant,
         };
-        let slow_percentile = matches
-            .value_of("reportslow")
-            .map(|v| v.parse::<f64>().unwrap());
+        let slow_percentile = *matches.get_one("reportslow").unwrap();
 
         let result = (
             Config {
