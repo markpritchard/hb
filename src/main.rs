@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate log;
 
-use crate::config::HttpMethod;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
+use crate::config::{HttpMethod, LoadTestContext};
 use crate::workers::BenchResult;
 
 mod config;
@@ -20,7 +20,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Parse the command line and read in the set of URLs we use to test
-    let (config, urls, payloads) = config::Config::from_cmdline()?;
+    let LoadTestContext {
+        config,
+        urls,
+        payloads,
+    } = config::Config::from_cmdline()?;
 
     // When testing POST or PUT, the total number of distinct requests should be the size of payloads list
     let distinct_requests_count = match config.http_method {
@@ -38,8 +42,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         config.http_method,
         config.concurrency,
         &request_generator,
-        &urls,
-        &payloads,
+        urls,
+        payloads,
     );
     let bench_end = Instant::now();
 
@@ -49,7 +53,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Generate a report if required
     if let Some(slow_percentile) = config.slow_percentile {
-        print_slow_report(result_summary, &urls, slow_percentile);
+        print_slow_report(result_summary, urls, slow_percentile);
     }
 
     Ok(())

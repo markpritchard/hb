@@ -50,11 +50,11 @@ pub(crate) enum DelayDistribution {
     NegativeExponential,
 }
 
-/// Declare a type for this complex tuple. The 3 values are:
-///  - config
-///  - urls
-///  - payloads
-type LoadTestContext = (Config, Vec<String>, Vec<String>);
+pub(crate) struct LoadTestContext {
+    pub(crate) config: Config,
+    pub(crate) urls: &'static Vec<String>,
+    pub(crate) payloads: &'static Vec<String>,
+}
 
 impl Config {
     pub(crate) fn from_cmdline() -> Result<LoadTestContext, Box<dyn Error>> {
@@ -151,7 +151,7 @@ impl Config {
         let url_prefix = matches.get_one("urlprefix").copied();
         let url_file = matches.get_one("urlfile").copied();
         let args_urls: Option<Vec<&str>> = matches.get_many("urls").map(|v| v.copied().collect());
-        let urls = load_urls(url_prefix, url_file, args_urls)?;
+        let urls = Box::leak(Box::new(load_urls(url_prefix, url_file, args_urls)?));
 
         // Grab basic params
         // TODO cleanup parsing of these arguments
@@ -186,19 +186,26 @@ impl Config {
         } else {
             vec![]
         };
+        let payloads = Box::leak(Box::new(payloads));
 
+        // If we are running POST or PUT, we need to have payloads and can only have a single URL as the endpoint
         match http_method {
             HttpMethod::Post | HttpMethod::Put => {
                 assert!(
                     !payloads.is_empty(),
                     "Payloads must be supplied when http_method is set to POST or PUT"
                 );
+                assert_eq!(
+                    !urls.len(),
+                    0,
+                    "Must only have a single URL for POST or PUT"
+                );
             }
             _ => {}
         }
 
-        let result = (
-            Config {
+        Ok(LoadTestContext {
+            config: Config {
                 concurrency,
                 requests,
                 order,
@@ -209,8 +216,7 @@ impl Config {
             },
             urls,
             payloads,
-        );
-        Ok(result)
+        })
     }
 }
 
