@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::io::BufRead;
@@ -57,7 +58,11 @@ pub(crate) struct LoadTestContext {
 }
 
 impl Config {
-    pub(crate) fn from_cmdline() -> Result<LoadTestContext, Box<dyn Error>> {
+    pub(crate) fn from_cmdline<I, T>(args: I) -> Result<LoadTestContext, Box<dyn Error>>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+    {
         let matches = clap::Command::new("httpbench")
             .version("0.1.0")
             .about("HTTP/S load testing tool")
@@ -95,10 +100,10 @@ impl Config {
                 .help("time between requests (NB: includes response time)"))
 
             .arg(Arg::new("delaydist")
+                .value_parser(PossibleValuesParser::new(["c", "u", "ne"]))
                 .short('d')
                 .long("delay-dist")
                 .value_name("distribution")
-                .value_parser(PossibleValuesParser::new(["c", "u", "ne"]))
                 .default_value("c")
                 .requires("delay")
                 .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
@@ -130,11 +135,11 @@ impl Config {
                 .value_name("percentile")
                 .help("Generate a report of requests over a given latency"))
 
-            .arg(Arg::new("http_method")
+            .arg(Arg::new("httpmethod")
+                .value_parser(PossibleValuesParser::new(["GET", "POST", "PUT"]))
                 .short('m')
                 .long("method")
-                .value_name("http_method")
-                .value_parser(PossibleValuesParser::new(["GET", "POST", "PUT"]))
+                .value_name("httpmethod")
                 .default_value("GET")
                 .help("The HTTP method used for this test. Only GET, POST, and PUT are currently supported. \
                           When [http_method] is set to POST or PUT only the first url is used for all requests, and you must \
@@ -145,32 +150,36 @@ impl Config {
                 .value_name("payload file path")
                 .help("The payload for POST and PUT requests. Each request in the test takes one line in this file as payload."))
 
-            .get_matches();
+            .get_matches_from(args);
 
         // Extract the URLs
-        let url_prefix = matches.get_one("urlprefix").copied();
-        let url_file = matches.get_one("urlfile").copied();
-        let args_urls: Option<Vec<&str>> = matches.get_many("urls").map(|v| v.copied().collect());
+        let url_prefix = matches.get_one::<String>("urlprefix");
+        let url_file = matches.get_one::<String>("urlfile");
+        let args_urls: Option<Vec<String>> = matches
+            .get_many::<String>("urls")
+            .map(|v| v.into_iter().cloned().collect());
         let urls = Box::leak(Box::new(load_urls(url_prefix, url_file, args_urls)?));
 
         // Grab basic params
         // TODO cleanup parsing of these arguments
         let concurrency: u16 = *matches.get_one("concurrency").unwrap();
         let requests: usize = *matches.get_one("requests").unwrap();
-        let order = match matches.get_one("order").copied().unwrap() {
+        let order = matches.get_one::<String>("order").unwrap();
+        let order = match order.as_str() {
             "s" => RequestOrder::Sequential,
             _ => RequestOrder::Random,
         };
         let delay_ms: u32 = *matches.get_one("delay").unwrap();
-        let delay_distrib = match matches.get_one("delaydist").copied().unwrap() {
+        let delay_distrib = matches.get_one::<String>("delaydist").unwrap();
+        let delay_distrib = match delay_distrib.as_str() {
             "u" => DelayDistribution::Uniform,
             "ne" => DelayDistribution::NegativeExponential,
             _ => DelayDistribution::Constant,
         };
-        let slow_percentile = *matches.get_one("reportslow").unwrap();
+        let slow_percentile = matches.get_one::<f64>("reportslow").copied();
 
-        let http_method = HttpMethod::from_str(matches.get_one("http_method").copied().unwrap())
-            .expect("Unsupported http method");
+        let http_method = matches.get_one::<String>("httpmethod").unwrap();
+        let http_method = HttpMethod::from_str(http_method).expect("Unsupported http method");
 
         let payloads = if let Some(payloads_file) = matches.get_one::<&str>("payloads").copied() {
             info!("Loading payloads from {}", payloads_file);
@@ -221,9 +230,9 @@ impl Config {
 }
 
 fn load_urls(
-    url_prefix: Option<&str>,
-    url_file: Option<&str>,
-    args_urls: Option<Vec<&str>>,
+    url_prefix: Option<&String>,
+    url_file: Option<&String>,
+    args_urls: Option<Vec<String>>,
 ) -> Result<Vec<String>, Box<dyn Error>> {
     // Read from a file, or just collect the URLs on the command line
     let mut urls: Vec<String> = if let Some(url_file) = url_file {
@@ -263,14 +272,34 @@ fn load_urls(
 mod tests {
     use super::*;
 
+    // Verify we can parse the URL prefix from the command line
+    #[test]
+    fn argparse_url_prefix() {
+        let args = vec!["hb", "-p", "http://localhost", "/test"];
+        let context = Config::from_cmdline(args).unwrap();
+        assert_eq!(&vec!("http://localhost/test".to_string()), context.urls);
+    }
+
+    // Verify we can parse the concurrency from the command line
+    #[test]
+    fn argparse_concurrency() {
+        let args = vec!["hb", "-c", "42", "http://test"];
+        let context = Config::from_cmdline(args).unwrap();
+        assert_eq!(42, context.config.concurrency);
+    }
+
     // Verify that we prepend the URL prefix to any urls not currently prefixed with a valid scheme, host etc
     #[test]
-    fn url_prefix() {
-        let prefix = "http://localhost:8070/";
-        let expected = "http://localhost:8070/abc123?def=456";
-        let urls = vec![expected, "abc123?def=456", "/abc123?def=456"];
+    fn url_prefix_prepended() {
+        let prefix = "http://localhost:8070/".to_string();
+        let expected = "http://localhost:8070/abc123?def=456".to_string();
+        let urls = vec![
+            expected.clone(),
+            "abc123?def=456".to_string(),
+            "/abc123?def=456".to_string(),
+        ];
 
-        let loaded = load_urls(Some(prefix), None, Some(urls)).unwrap();
+        let loaded = load_urls(Some(&prefix), None, Some(urls)).unwrap();
         for test in loaded {
             assert_eq!(expected, test);
         }

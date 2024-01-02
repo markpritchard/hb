@@ -44,11 +44,11 @@ At the moment the only platform supported is Linux. Future releases will include
 
 #### Linux, static build, x86_64
 
-This uses a [Docker container](https://github.com/emk/rust-musl-builder) to build a statically linked binary that can be run on any reasonable x86_64 environment.
+This uses a [Docker container](https://github.com/clux/muslrust/) to build a statically linked binary that can be run on any reasonable x86_64 environment.
 
 ```
-alias rust-musl-builder='docker run --rm -it -v "$(pwd)":/home/rust/src ekidd/rust-musl-builder'
-rust-musl-builder cargo build --release
+docker pull clux/muslrust:stable
+docker run -v $PWD:/volume --rm -t clux/muslrust:stable cargo build --release
 ```
 
 #### Compiling locally

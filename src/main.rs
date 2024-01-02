@@ -2,6 +2,7 @@
 extern crate log;
 
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
 use std::time::{Duration, Instant};
 
@@ -20,11 +21,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     // Parse the command line and read in the set of URLs we use to test
+    let args: Vec<String> = env::args().collect();
     let LoadTestContext {
         config,
         urls,
         payloads,
-    } = config::Config::from_cmdline()?;
+    } = config::Config::from_cmdline(args)?;
 
     // When testing POST or PUT, the total number of distinct requests should be the size of payloads list
     let distinct_requests_count = match config.http_method {
@@ -41,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let result_summary = workers::run_test(
         config.http_method,
         config.concurrency,
-        &request_generator,
+        request_generator,
         urls,
         payloads,
     );

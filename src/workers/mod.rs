@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
@@ -51,22 +52,42 @@ impl BenchResult {
 pub(crate) fn run_test(
     http_method: HttpMethod,
     concurrency: u16,
-    request_generator: &RequestGenerator,
+    request_generator: RequestGenerator,
     urls: &'static [String],
     payloads: &'static [String],
 ) -> BenchResult {
-    let mut results = Vec::new();
+    let request_generator = Arc::new(request_generator);
+    let results = Arc::new(Mutex::new(Vec::new()));
+
+    info!("Starting test with {} workers", concurrency);
+
+    let mut workers = Vec::new();
     for worker_id in 0..concurrency {
-        thread::scope(|s| {
-            let x =
-                s.spawn(|| run_worker(worker_id, request_generator, http_method, urls, payloads));
-            results.push(x.join().unwrap());
+        let request_generator = request_generator.clone();
+        let results = results.clone();
+        let worker = thread::spawn(move || {
+            let result = run_worker(worker_id, request_generator, http_method, urls, payloads);
+            let mut results = results.lock().unwrap();
+            results.push(result);
         });
+        workers.push(worker);
+    }
+
+    // Wait for workers to complete
+    info!("Waiting for workers to complete");
+    for worker in workers {
+        worker.join().unwrap();
     }
 
     // Combine all the individual test results
     let mut merged = BenchResult::new();
-    for mut result in results {
+    let mut results = results.lock().unwrap();
+    info!(
+        "Merging {} results from {} workers",
+        results.len(),
+        concurrency
+    );
+    for result in results.iter_mut() {
         result.add_to(&mut merged);
     }
 
@@ -75,7 +96,7 @@ pub(crate) fn run_test(
 
 fn run_worker(
     worker_id: u16,
-    request_generator: &RequestGenerator,
+    request_generator: Arc<RequestGenerator>,
     http_method: HttpMethod,
     urls: &'static [String],
     payloads: &'static [String],
@@ -85,7 +106,7 @@ fn run_worker(
     // Execute requests until we are done
     let client = reqwest::blocking::Client::new();
     while let Some(request) = request_generator.next() {
-        debug!("{} -> {:?}", worker_id, request);
+        trace!("{} -> {:?}", worker_id, request);
 
         // If we have a delay between requests, then sleep
         if request.sleep.as_nanos() > 0 {
