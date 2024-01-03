@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::config::HttpMethod;
 use hdrhistogram::Histogram;
+use reqwest::header::HeaderMap;
 use reqwest::Method;
 
 use crate::requestgen::RequestGenerator;
@@ -51,6 +52,7 @@ impl BenchResult {
 /// Starts workers that pull requests from the generator, runs them and tracks benchmark statistics
 pub(crate) fn run_test(
     http_method: HttpMethod,
+    header_map: Option<HeaderMap>,
     concurrency: u16,
     request_generator: RequestGenerator,
     urls: &'static [String],
@@ -65,8 +67,16 @@ pub(crate) fn run_test(
     for worker_id in 0..concurrency {
         let request_generator = request_generator.clone();
         let results = results.clone();
+        let header_map = header_map.clone();
         let worker = thread::spawn(move || {
-            let result = run_worker(worker_id, request_generator, http_method, urls, payloads);
+            let result = run_worker(
+                worker_id,
+                request_generator,
+                http_method,
+                header_map.clone(),
+                urls,
+                payloads,
+            );
             let mut results = results.lock().unwrap();
             results.push(result);
         });
@@ -98,6 +108,7 @@ fn run_worker(
     worker_id: u16,
     request_generator: Arc<RequestGenerator>,
     http_method: HttpMethod,
+    header_map: Option<HeaderMap>,
     urls: &'static [String],
     payloads: &'static [String],
 ) -> BenchResult {
@@ -121,6 +132,11 @@ fn run_worker(
         };
         let url = urls[request.url_index].as_str();
         let mut request_builder = client.request(reqwest_method, url);
+
+        // Add the headers
+        if let Some(hm) = header_map.clone() {
+            request_builder = request_builder.headers(hm);
+        }
 
         // If we are running POST or PUT then add the payload
         if http_method == HttpMethod::Post || http_method == HttpMethod::Put {
