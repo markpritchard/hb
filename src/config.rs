@@ -17,6 +17,7 @@ pub(crate) struct Config {
     pub delay_distrib: DelayDistribution,
     pub slow_percentile: Option<f64>,
     pub http_method: HttpMethod,
+    pub headers: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -72,6 +73,7 @@ impl Config {
                 .short('c')
                 .value_name("concurrency")
                 .default_value("10")
+                .num_args(1)
                 .help("number of workers generating load"))
 
             // Number of requests to execute
@@ -80,6 +82,7 @@ impl Config {
                 .short('n')
                 .value_name("requests")
                 .default_value("100")
+                .num_args(1)
                 .help("number of requests to execute"))
 
             // Order of requests
@@ -88,6 +91,7 @@ impl Config {
                 .short('o')
                 .value_name("order")
                 .default_value("r")
+                .num_args(1)
                 .help("order in which to request URLs: r=random, s=sequential"))
 
             // Time delay between request *dispatch*
@@ -97,6 +101,7 @@ impl Config {
                 .long("delay-time")
                 .value_name("ms")
                 .default_value("0")
+                .num_args(1)
                 .help("time between requests (NB: includes response time)"))
 
             .arg(Arg::new("delaydist")
@@ -106,6 +111,7 @@ impl Config {
                 .value_name("distribution")
                 .default_value("c")
                 .requires("delay")
+                .num_args(1)
                 .help("distribution of delay times: c=constant, u=uniform, ne=negative exponential"))
 
             // URLs we test with - in a file, or passed as command-line args
@@ -115,16 +121,15 @@ impl Config {
                 .value_name("file")
                 .required_unless_present("urls")
                 .conflicts_with("urls")
+                .num_args(1)
                 .help("file containing URLs to request"))
-            .arg(Arg::new("urls")
-                .index(1)
-                .value_name("URL"))
 
             // Prefix for URLs
             .arg(Arg::new("urlprefix")
                 .short('p')
                 .long("prefix")
                 .value_name("urlprefix")
+                .num_args(1)
                 .help("Prefix to automatically add to URLs (e.g. if your URL file contains just paths+query strings such as from a load-balancer log"))
 
             // Generate a slow queries report - anything over the nominated latency
@@ -133,6 +138,7 @@ impl Config {
                 .short('s')
                 .long("reportslow")
                 .value_name("percentile")
+                .num_args(1)
                 .help("Generate a report of requests over a given latency"))
 
             .arg(Arg::new("httpmethod")
@@ -141,14 +147,27 @@ impl Config {
                 .long("method")
                 .value_name("httpmethod")
                 .default_value("GET")
+                .num_args(1)
                 .help("The HTTP method used for this test. Only GET, POST, and PUT are currently supported. \
                           When [http_method] is set to POST or PUT only the first url is used for all requests, and you must \
                           also supply 'payloads' argument."))
 
+            .arg(Arg::new("headers")
+                .short('H')
+                .long("header")
+                .value_name("header")
+                .help("Extra header to include in the request e.g. -H 'Content-Type: application/json'"))
+
             .arg(Arg::new("payloads")
                 .long("payloads")
                 .value_name("payload file path")
+                .num_args(1)
                 .help("The payload for POST and PUT requests. Each request in the test takes one line in this file as payload."))
+
+            // Remaining arguments are URLs to test against
+            .arg(Arg::new("urls")
+                .index(1)
+                .value_name("URL"))
 
             .get_matches_from(args);
 
@@ -180,6 +199,10 @@ impl Config {
 
         let http_method = matches.get_one::<String>("httpmethod").unwrap();
         let http_method = HttpMethod::from_str(http_method).expect("Unsupported http method");
+
+        let headers: Option<Vec<String>> = matches
+            .get_many::<String>("headers")
+            .map(|v| v.into_iter().cloned().collect());
 
         let payloads = if let Some(payloads_file) = matches.get_one::<&str>("payloads").copied() {
             info!("Loading payloads from {}", payloads_file);
@@ -222,6 +245,7 @@ impl Config {
                 delay_distrib,
                 slow_percentile,
                 http_method,
+                headers,
             },
             urls,
             payloads,
@@ -286,6 +310,15 @@ mod tests {
         let args = vec!["hb", "-c", "42", "http://test"];
         let context = Config::from_cmdline(args).unwrap();
         assert_eq!(42, context.config.concurrency);
+    }
+
+    // Verify we can parse the concurrency from the command line
+    #[test]
+    fn argparse_headers() {
+        let args = vec!["hb", "-H", "Content-Type: application/json", "http://test"];
+        let context = Config::from_cmdline(args).unwrap();
+        let expected = Some(vec!["Content-Type: application/json".to_string()]);
+        assert_eq!(expected, context.config.headers);
     }
 
     // Verify that we prepend the URL prefix to any urls not currently prefixed with a valid scheme, host etc

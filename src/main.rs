@@ -1,9 +1,11 @@
 #[macro_use]
 extern crate log;
 
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use crate::config::{HttpMethod, LoadTestContext};
@@ -37,11 +39,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialise the request generator from the config
     let request_generator = requestgen::RequestGenerator::new(&config, distinct_requests_count);
 
+    // Build the headers added to each request
+    let header_map = config.headers.map(|headers| {
+        let mut map = HeaderMap::new();
+
+        for header_str in headers {
+            let mut iter = header_str.split(':');
+            let key = HeaderName::from_str(iter.next().unwrap().trim()).unwrap();
+            let value = HeaderValue::from_str(iter.next().unwrap().trim()).unwrap();
+            map.insert(key, value);
+        }
+
+        map
+    });
+
     // Launch the workers
     let bench_start = Instant::now();
     info!("Running test");
     let result_summary = workers::run_test(
         config.http_method,
+        header_map,
         config.concurrency,
         request_generator,
         urls,

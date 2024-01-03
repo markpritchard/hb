@@ -88,6 +88,7 @@ mod tests {
             delay_distrib: DelayDistribution::Constant,
             slow_percentile: None,
             http_method: HttpMethod::Get,
+            headers: None,
         };
 
         let urls = vec![
