@@ -128,7 +128,11 @@ fn run_worker(
         }
 
         // Initialise the request
-        let url = urls[hb_request.url_index].as_str();
+        // When testing POST or PUT only one url is provided
+        let url = match http_method {
+            HttpMethod::Post | HttpMethod::Put => urls[0].as_str(),
+            _ => urls[hb_request.url_index].as_str(),
+        };
         let mut ureq_request = agent.request(http_method.as_str(), url);
 
         // Add the headers
