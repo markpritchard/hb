@@ -181,7 +181,7 @@ impl Config {
         let http_method = matches.get_one::<String>("httpmethod").unwrap();
         let http_method = HttpMethod::from_str(http_method).expect("Unsupported http method");
 
-        let payloads = if let Some(payloads_file) = matches.get_one::<&str>("payloads").copied() {
+        let payloads = if let Some(payloads_file) = matches.get_one::<String>("payloads") {
             info!("Loading payloads from {}", payloads_file);
             let file = fs::File::open(payloads_file);
             match file {
@@ -204,11 +204,7 @@ impl Config {
                     !payloads.is_empty(),
                     "Payloads must be supplied when http_method is set to POST or PUT"
                 );
-                assert_eq!(
-                    !urls.len(),
-                    0,
-                    "Must only have a single URL for POST or PUT"
-                );
+                assert_eq!(urls.len(), 1, "Must only have a single URL for POST or PUT");
             }
             _ => {}
         }
