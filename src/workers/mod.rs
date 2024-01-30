@@ -119,7 +119,11 @@ fn run_worker(
             HttpMethod::Post => Method::POST,
             HttpMethod::Put => Method::PUT,
         };
-        let url = urls[request.url_index].as_str();
+        // When testing POST or PUT only one url is provided
+        let url = match http_method {
+            HttpMethod::Post | HttpMethod::Put => urls[0].as_str(),
+            _ => urls[request.url_index].as_str(),
+        };
         let mut request_builder = client.request(reqwest_method, url);
 
         // If we are running POST or PUT then add the payload
