@@ -1,13 +1,13 @@
 use std::collections::HashMap;
+use std::io::BufReader;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Instant;
+use std::{io, thread};
+
+use hdrhistogram::Histogram;
+use ureq::{Agent, Error};
 
 use crate::config::HttpMethod;
-use hdrhistogram::Histogram;
-use reqwest::header::HeaderMap;
-use reqwest::Method;
-
 use crate::requestgen::RequestGenerator;
 
 /// Statistics we generate during the benchmark process
@@ -51,8 +51,9 @@ impl BenchResult {
 
 /// Starts workers that pull requests from the generator, runs them and tracks benchmark statistics
 pub(crate) fn run_test(
+    agent: Agent,
     http_method: HttpMethod,
-    header_map: Option<HeaderMap>,
+    header_map: Option<HashMap<String, String>>,
     concurrency: u16,
     request_generator: RequestGenerator,
     urls: &'static [String],
@@ -68,12 +69,14 @@ pub(crate) fn run_test(
         let request_generator = request_generator.clone();
         let results = results.clone();
         let header_map = header_map.clone();
+        let agent = agent.clone();
         let worker = thread::spawn(move || {
             let result = run_worker(
                 worker_id,
                 request_generator,
+                agent,
                 http_method,
-                header_map.clone(),
+                header_map,
                 urls,
                 payloads,
             );
@@ -107,59 +110,58 @@ pub(crate) fn run_test(
 fn run_worker(
     worker_id: u16,
     request_generator: Arc<RequestGenerator>,
+    agent: Agent,
     http_method: HttpMethod,
-    header_map: Option<HeaderMap>,
+    header_map: Option<HashMap<String, String>>,
     urls: &'static [String],
     payloads: &'static [String],
 ) -> BenchResult {
     let mut result = BenchResult::new();
 
     // Execute requests until we are done
-    let client = reqwest::blocking::Client::new();
-    while let Some(request) = request_generator.next() {
-        trace!("{} -> {:?}", worker_id, request);
+    while let Some(hb_request) = request_generator.next() {
+        trace!("{} -> {:?}", worker_id, hb_request);
 
         // If we have a delay between requests, then sleep
-        if request.sleep.as_nanos() > 0 {
-            thread::sleep(request.sleep);
+        if hb_request.sleep.as_nanos() > 0 {
+            thread::sleep(hb_request.sleep);
         }
 
-        // Initialise the request builder
-        let reqwest_method = match http_method {
-            HttpMethod::Get => Method::GET,
-            HttpMethod::Post => Method::POST,
-            HttpMethod::Put => Method::PUT,
-        };
-        let url = urls[request.url_index].as_str();
-        let mut request_builder = client.request(reqwest_method, url);
+        // Initialise the request
+        let url = urls[hb_request.url_index].as_str();
+        let mut ureq_request = agent.request(http_method.as_str(), url);
 
         // Add the headers
-        if let Some(hm) = header_map.clone() {
-            request_builder = request_builder.headers(hm);
-        }
-
-        // If we are running POST or PUT then add the payload
-        if http_method == HttpMethod::Post || http_method == HttpMethod::Put {
-            let payload: &'static str = &payloads[request.url_index];
-            // TODO: allow user to override POST request content-type, setting it to json for now.
-            request_builder = request_builder
-                .body(payload)
-                .header("Content-Type", "application/json");
+        if let Some(ref hm) = header_map {
+            for (header, value) in hm {
+                ureq_request = ureq_request.set(header, value);
+            }
         }
 
         // Execute the request
         let start = Instant::now();
-        let response = request_builder.send();
+        let ureq_response = if http_method == HttpMethod::Post || http_method == HttpMethod::Put {
+            let payload: &'static str = &payloads[hb_request.url_index];
+
+            // TODO: allow user to override POST request content-type, setting it to json for now
+            ureq_request
+                .set("Content-Type", "application/json")
+                .send_string(payload)
+        } else {
+            ureq_request.call()
+        };
 
         // Track response code statistics
         let mut duration = 0;
-        match response {
+        match ureq_response {
             Ok(response) => {
-                let count = result.status.entry(response.status().as_u16()).or_insert(0);
+                let count = result.status.entry(response.status()).or_insert(0);
                 *count += 1;
 
                 // Read the response and track errors
-                if let Err(e) = response.bytes() {
+                let mut reader = BufReader::new(response.into_reader());
+                let mut sink = io::empty();
+                if let Err(e) = io::copy(&mut reader, &mut sink) {
                     result.response_errors += 1;
                     warn!("Error retrieving response for {}: {}", url, e);
                 }
@@ -167,9 +169,12 @@ fn run_worker(
                 let end = Instant::now();
                 duration = end.duration_since(start).as_millis() as u64;
             }
-            Err(e) => {
+            Err(Error::Status(code, response)) => {
                 result.request_errors += 1;
-                warn!("Hit error processing {}: {}", url, e);
+                warn!("Hit error processing {}: {} {:?}", url, code, response);
+            }
+            Err(Error::Transport(transport)) => {
+                panic!("Hit transport layer error {}: {}", url, transport);
             }
         }
 
@@ -177,7 +182,7 @@ fn run_worker(
         result.latency += duration;
 
         // Track the per-request latency too
-        result.request_times.push((request.url_index, duration));
+        result.request_times.push((hb_request.url_index, duration));
     }
 
     result
