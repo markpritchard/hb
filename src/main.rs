@@ -1,12 +1,12 @@
 #[macro_use]
 extern crate log;
 
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::str::FromStr;
 use std::time::{Duration, Instant};
+
+use ureq::Agent;
 
 use crate::config::{HttpMethod, LoadTestContext};
 use crate::workers::BenchResult;
@@ -41,22 +41,27 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Build the headers added to each request
     let header_map = config.headers.map(|headers| {
-        let mut map = HeaderMap::new();
+        let mut map = HashMap::new();
 
         for header_str in headers {
             let mut iter = header_str.split(':');
-            let key = HeaderName::from_str(iter.next().unwrap().trim()).unwrap();
-            let value = HeaderValue::from_str(iter.next().unwrap().trim()).unwrap();
-            map.insert(key, value);
+            let header = iter.next().unwrap().trim().to_string();
+            let value = iter.next().unwrap().trim().to_string();
+            map.insert(header, value);
         }
 
         map
     });
 
+    // Initialise the ureq agent (shared connection pool etc)
+    let agent: Agent = ureq::AgentBuilder::new().build();
+
     // Launch the workers
     let bench_start = Instant::now();
     info!("Running test");
+
     let result_summary = workers::run_test(
+        agent,
         config.http_method,
         header_map,
         config.concurrency,
