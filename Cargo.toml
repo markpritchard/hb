@@ -11,7 +11,7 @@ hdrhistogram = "7.5.4"
 indicatif = "0.17.8"
 log = "0.4.21"
 rand = "0.8.5"
-ureq = { version = "2.9.6", features = ["charset"] }
+ureq = { version = "2.9.7", features = ["charset"] }
 url = "2.5.0"
 
 [dev-dependencies]
