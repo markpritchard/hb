@@ -1,6 +1,6 @@
 [package]
 name = "hb"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Mark Pritchard <mpritcha@gmail.com>"]
 edition = "2021"
 
