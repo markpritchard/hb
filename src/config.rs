@@ -170,7 +170,7 @@ impl Config {
 
             .arg(Arg::new("payloads")
                 .long("payloads")
-                .value_name("payload file path")
+                .value_name("payloads")
                 .num_args(1)
                 .help("The payload for POST and PUT requests. Each request in the test takes one line in this file as payload."))
 
