@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     // Initialise the ureq agent (shared connection pool etc)
-    let agent: Agent = ureq::AgentBuilder::new().build();
+    let agent: Agent = ureq::Agent::new().build();
 
     // Launch the workers
     let bench_start = Instant::now();

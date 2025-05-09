@@ -1,17 +1,17 @@
 [package]
 name = "hb"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Mark Pritchard <mpritcha@gmail.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-clap = "4.5.26"
-env_logger = "0.11.6"
+clap = "4.5.37"
+env_logger = "0.11.8"
 hdrhistogram = "7.5.4"
-indicatif = "0.17.9"
-log = "0.4.22"
-rand = "0.8.5"
-ureq = { version = "2.10.1", features = ["charset"] }
+indicatif = "0.17.11"
+log = "0.4.27"
+rand = "0.9.1"
+ureq = { version = "3.0.11", features = ["charset"] }
 url = "2.5.4"
 
 [dev-dependencies]
