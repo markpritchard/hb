@@ -1,7 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rand::{thread_rng, Rng};
-
 use crate::config::RequestOrder;
 
 /// Creates an index supplier based on the nominated request order etc
@@ -46,7 +44,7 @@ impl IndexSupplier for RandomIndex {
 
         // Extract the next URL if we haven't generated sufficient URLs
         if count < self.requests {
-            Some(thread_rng().gen_range(0..self.limit))
+            Some(rand::random_range(0..self.limit))
         } else {
             None
         }

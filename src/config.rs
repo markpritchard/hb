@@ -41,16 +41,6 @@ impl FromStr for HttpMethod {
     }
 }
 
-impl HttpMethod {
-    pub(crate) fn as_str(&self) -> &'static str {
-        match self {
-            HttpMethod::Get => "GET",
-            HttpMethod::Post => "POST",
-            HttpMethod::Put => "PUT",
-        }
-    }
-}
-
 pub(crate) enum RequestOrder {
     Sequential,
     Random,
