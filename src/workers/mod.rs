@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use std::thread;
+use std::time::Instant;
 
 use crate::config::HttpMethod;
 use crate::requestgen::RequestGenerator;
@@ -114,7 +114,6 @@ fn run_worker(
     urls: &'static [String],
     payloads: &'static [String],
 ) -> BenchResult {
-
     let mut result = BenchResult::new();
 
     // Execute requests until we are done
@@ -151,7 +150,24 @@ fn run_worker(
                 builder.call()
             }
             HttpMethod::Post | HttpMethod::Put => {
-                todo!()
+                let mut builder = if http_method == HttpMethod::Post {
+                    agent.post(url)
+                } else {
+                    agent.put(url)
+                };
+
+                // Add the headers
+                if let Some(ref hm) = header_map {
+                    for (header, value) in hm {
+                        builder = builder.header(header, value.as_str());
+                    }
+                }
+
+                // TODO: allow user to override POST request content-type, setting it to json for now
+                let payload: &'static str = &payloads[hb_request.url_index];
+                builder
+                    .header("Content-Type", "application/json")
+                    .send(payload)
             }
         };
 
@@ -159,9 +175,6 @@ fn run_worker(
         let mut duration = 0;
         match ureq_response {
             Ok(mut response) => {
-                let count = result.status.entry(response.status().as_u16()).or_insert(0);
-                *count += 1;
-
                 // Read the response and track errors
                 if let Err(e) = response.body_mut().read_to_string() {
                     result.response_errors += 1;
@@ -172,6 +185,9 @@ fn run_worker(
                 duration = end.duration_since(start).as_millis() as u64;
             }
             Err(Error::StatusCode(code)) => {
+                let count = result.status.entry(code).or_insert(0);
+                *count += 1;
+
                 result.request_errors += 1;
                 warn!("Hit error processing {}: {}", url, code);
             }

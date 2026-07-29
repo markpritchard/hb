@@ -6,7 +6,7 @@ use std::io::BufRead;
 use std::str::FromStr;
 
 use clap::builder::PossibleValuesParser;
-use clap::{value_parser, Arg, ArgAction};
+use clap::{Arg, ArgAction, value_parser};
 use url::Url;
 
 pub(crate) struct Config {
@@ -312,9 +312,19 @@ mod tests {
     // Verify we can parse the concurrency from the command line
     #[test]
     fn argparse_headers() {
-        let args = vec!["hb", "-H", "Content-Type: application/json", "-H", "Authorization: Bearer Token", "http://test"];
+        let args = vec![
+            "hb",
+            "-H",
+            "Content-Type: application/json",
+            "-H",
+            "Authorization: Bearer Token",
+            "http://test",
+        ];
         let context = Config::from_cmdline(args).unwrap();
-        let expected = Some(vec!["Content-Type: application/json".to_string(), "Authorization: Bearer Token".to_string()]);
+        let expected = Some(vec![
+            "Content-Type: application/json".to_string(),
+            "Authorization: Bearer Token".to_string(),
+        ]);
         assert_eq!(expected, context.config.headers);
     }
 

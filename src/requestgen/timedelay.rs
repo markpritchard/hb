@@ -46,7 +46,7 @@ struct NegativeExponentialDelay {
 
 impl NegativeExponentialDelay {
     fn new(delay_us: u64) -> NegativeExponentialDelay {
-        let z_neg = -1f64 * delay_us as f64;
+        let z_neg = -(delay_us as f64);
         NegativeExponentialDelay { z_neg }
     }
 }
