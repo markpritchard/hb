@@ -1,14 +1,12 @@
 use std::collections::HashMap;
-use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::{io, thread};
-
-use hdrhistogram::Histogram;
-use ureq::{Agent, Error};
+use std::thread;
 
 use crate::config::HttpMethod;
 use crate::requestgen::RequestGenerator;
+use hdrhistogram::Histogram;
+use ureq::{Agent, Error};
 
 /// Statistics we generate during the benchmark process
 pub(crate) struct BenchResult {
@@ -116,6 +114,7 @@ fn run_worker(
     urls: &'static [String],
     payloads: &'static [String],
 ) -> BenchResult {
+
     let mut result = BenchResult::new();
 
     // Execute requests until we are done
@@ -133,39 +132,38 @@ fn run_worker(
             HttpMethod::Post | HttpMethod::Put => urls[0].as_str(),
             _ => urls[hb_request.url_index].as_str(),
         };
-        let mut ureq_request = agent.request(http_method.as_str(), url);
-
-        // Add the headers
-        if let Some(ref hm) = header_map {
-            for (header, value) in hm {
-                ureq_request = ureq_request.set(header, value);
-            }
-        }
 
         // Execute the request
         let start = Instant::now();
-        let ureq_response = if http_method == HttpMethod::Post || http_method == HttpMethod::Put {
-            let payload: &'static str = &payloads[hb_request.url_index];
+        let ureq_response = match http_method {
+            HttpMethod::Get => {
+                // Prepare the request
+                let mut builder = agent.get(url);
 
-            // TODO: allow user to override POST request content-type, setting it to json for now
-            ureq_request
-                .set("Content-Type", "application/json")
-                .send_string(payload)
-        } else {
-            ureq_request.call()
+                // Add the headers
+                if let Some(ref hm) = header_map {
+                    for (header, value) in hm {
+                        builder = builder.header(header, value.as_str());
+                    }
+                }
+
+                // Run it
+                builder.call()
+            }
+            HttpMethod::Post | HttpMethod::Put => {
+                todo!()
+            }
         };
 
         // Track response code statistics
         let mut duration = 0;
         match ureq_response {
-            Ok(response) => {
-                let count = result.status.entry(response.status()).or_insert(0);
+            Ok(mut response) => {
+                let count = result.status.entry(response.status().as_u16()).or_insert(0);
                 *count += 1;
 
                 // Read the response and track errors
-                let mut reader = BufReader::new(response.into_reader());
-                let mut sink = io::empty();
-                if let Err(e) = io::copy(&mut reader, &mut sink) {
+                if let Err(e) = response.body_mut().read_to_string() {
                     result.response_errors += 1;
                     warn!("Error retrieving response for {}: {}", url, e);
                 }
@@ -173,12 +171,15 @@ fn run_worker(
                 let end = Instant::now();
                 duration = end.duration_since(start).as_millis() as u64;
             }
-            Err(Error::Status(code, response)) => {
+            Err(Error::StatusCode(code)) => {
                 result.request_errors += 1;
-                warn!("Hit error processing {}: {} {:?}", url, code, response);
+                warn!("Hit error processing {}: {}", url, code);
             }
-            Err(Error::Transport(transport)) => {
+            Err(Error::Http(transport)) => {
                 panic!("Hit transport layer error {}: {}", url, transport);
+            }
+            Err(e) => {
+                panic!("Hit other error {}: {}", url, e);
             }
         }
 
