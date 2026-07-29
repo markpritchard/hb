@@ -4,9 +4,10 @@ extern crate log;
 use crate::config::{HttpMethod, LoadTestContext};
 use crate::workers::BenchResult;
 use std::collections::HashMap;
-use std::env;
 use std::error::Error;
+use std::fs::File;
 use std::time::{Duration, Instant};
+use std::{env, io};
 use ureq::Agent;
 
 mod config;
@@ -27,6 +28,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         urls,
         payloads,
     } = config::Config::from_cmdline(args)?;
+
+    // Check TIME_WAIT
+    check_time_wait()?;
 
     // When testing POST or PUT, the total number of distinct requests should be the size of payloads list
     let distinct_requests_count = match config.http_method {
@@ -79,6 +83,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Generate a report if required
     if let Some(slow_percentile) = config.slow_percentile {
         print_slow_report(result_summary, urls, slow_percentile);
+    }
+
+    Ok(())
+}
+
+fn check_time_wait() -> Result<(), Box<dyn Error>> {
+    if let Ok(setting) = io::read_to_string(File::open("/proc/sys/net/ipv4/tcp_tw_reuse")?)
+        && setting.trim() == "2"
+    {
+        warn!(
+            "net.ipv4.tcp_tw_reuse is set to 2 (only recycle connections in TIME_WAIT for provable loopback connections)"
+        );
+        warn!(
+            "This will likely exhaust ephemeral ports during the load test. Change this to 1 to allow faster reuse as follows:"
+        );
+        warn!("    sudo sysctl -w net.ipv4.tcp_tw_reuse=1");
     }
 
     Ok(())
