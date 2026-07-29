@@ -1,14 +1,13 @@
 #[macro_use]
 extern crate log;
 
+use crate::config::{HttpMethod, LoadTestContext};
+use crate::workers::BenchResult;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::time::{Duration, Instant};
 use ureq::Agent;
-use ureq::config::IpFamily;
-use crate::config::{HttpMethod, LoadTestContext};
-use crate::workers::BenchResult;
 
 mod config;
 mod requestgen;
@@ -55,9 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Initialise the ureq agent (shared connection pool etc)
     let agent: Agent = Agent::config_builder()
         .max_idle_connections_per_host(config.concurrency as usize)
-        .proxy(None)
-        .ip_family(IpFamily::Ipv4Only)
-        .build().new_agent();
+        .build()
+        .new_agent();
 
     // Launch the workers
     let bench_start = Instant::now();
@@ -129,7 +127,7 @@ fn print_slow_report(summary: BenchResult, urls: &[String], slow_percentile: f64
         .collect::<Vec<ReportLine>>();
 
     // Sort by latency in descending order and dump out the report
-    lines.sort_by(|l, r| r.max.cmp(&l.max));
+    lines.sort_by_key(|rl| std::cmp::Reverse(rl.max));
 
     println!(
         "\nSlow requests ({}%'ile -> {}ms):\nmax\tavg\tmin\tcount\trequest",

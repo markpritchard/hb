@@ -16,7 +16,3 @@ url = "2.5.8"
 
 [dev-dependencies]
 assert_approx_eq = "1.1.0"
-
-[profile.release]
-#lto = "fat"
-#codegen-units = 1
