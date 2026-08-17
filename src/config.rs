@@ -64,8 +64,7 @@ impl Config {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let matches = clap::Command::new("httpbench")
-            .version("0.1.0")
+        let matches = clap::command!()
             .about("HTTP/S load testing tool")
             // Number of concurrent requests / workers
             .arg(Arg::new("concurrency")
