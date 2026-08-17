@@ -173,7 +173,7 @@ fn run_worker(
 
         // Track response code statistics
         let mut duration = 0;
-        match ureq_response {
+        let status_code = match ureq_response {
             Ok(mut response) => {
                 // Read the response and track errors
                 if let Err(e) = response.body_mut().read_to_string() {
@@ -183,13 +183,14 @@ fn run_worker(
 
                 let end = Instant::now();
                 duration = end.duration_since(start).as_millis() as u64;
+
+                response.status().as_u16()
             }
             Err(Error::StatusCode(code)) => {
-                let count = result.status.entry(code).or_insert(0);
-                *count += 1;
-
                 result.request_errors += 1;
                 warn!("Hit error processing {}: {}", url, code);
+
+                code
             }
             Err(Error::Http(transport)) => {
                 panic!("Hit transport layer error {}: {}", url, transport);
@@ -197,7 +198,11 @@ fn run_worker(
             Err(e) => {
                 panic!("Hit other error {}: {}", url, e);
             }
-        }
+        };
+
+        // Update response codes
+        let count = result.status.entry(status_code).or_insert(0);
+        *count += 1;
 
         // Update the latency histogram
         result.latency += duration;
