@@ -5,13 +5,13 @@ authors = ["Mark Pritchard <mpritcha@gmail.com>"]
 edition = "2024"
 
 [dependencies]
-clap = "4.6.4"
+clap = {  version = "4.6.6", features = ["cargo"] }
 env_logger = "0.11.11"
 hdrhistogram = "7.6.0"
 indicatif = "0.18.6"
 log = "0.4.33"
 rand = "0.10.2"
-ureq = { version = "3.3.0", features = ["charset"] }
+ureq = { version = "3.4.0", features = ["charset"] }
 url = "2.5.8"
 
 [dev-dependencies]
